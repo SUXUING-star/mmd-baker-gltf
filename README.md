@@ -1,32 +1,70 @@
-# React + TypeScript + Vite
+# MMD to Humanoid GLB Motion Converter
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+A converter that turns MMD motion data (`.vmd`) into a standard humanoid skeletal animation stored in `.glb` format.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Overview
 
-## React Compiler
+Directly calculating and retargeting raw VMD motion tracks onto standard humanoid rigs is notoriously difficult due to MMD's proprietary IK chains, non-standard bone rest poses, physics interactions, and complex parent-child offsets.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+This project bypasses that complexity by using a two-step forward-kinematics baking and reconstruction approach:
 
-## Expanding the Oxlint configuration
+1. **Kinematic World Baking**: Load the `.pmx` model and `.vmd` motion inside Three.js (`MMDLoader`), step through the animation, and record the exact 3D world positions of key skeletal points frame by frame.
+2. **Humanoid Motion Solving**: Feed the baked 3D point cloud into a mathematical solver to reconstruct root translations and continuous local rotations for a standard 52-bone humanoid rig, exporting the final result as a ready-to-use `.glb` file.
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+---
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+## Pipeline
+
+```text
+[ .pmx + .vmd ] 
+       │
+       ▼
+1. Three.js MMDLoader Execution
+   - Plays animation with IK evaluation
+   - Captures frame-by-frame 3D world coordinates
+       │
+       ▼
+2. Humanoid Solver Engine
+   - Solves local bone orientations and hips motion
+   - Smooths trajectory and ensures quaternion continuity
+       │
+       ▼
+[ Output: Standard Humanoid .glb ]
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+---
+
+## Features
+
+- **Full In-Browser Processing**: Runs completely on the web via WebGL and Web APIs without server-side rendering or external dependencies like Blender.
+- **Standard Humanoid Rig**: Generates a standard humanoid skeletal hierarchy compatible with game engines like Unity, Unreal Engine, and WebGL viewers.
+- **Interactive 3D Visualizer**: Real-time preview of the baking process, point cloud landmarks, and immediate playback of the exported GLB animation.
+- **Drag & Drop Workflow**: Easily upload custom `.pmx` and `.vmd` files or test directly with pre-bundled demo assets.
+
+---
+
+## Quick Start
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/SUXUING-star/mmd-baker-gltf.git
+cd mmd-baker-gltf
+
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+```
+
+### Usage
+
+1. Open the application in your browser.
+2. Drag and drop your `.pmx` character file and `.vmd` motion file into their respective drop zones (or click **Use Built-in Demo** to run a sample).
+3. Click **Start Conversion**.
+4. Watch the real-time landmark baking in the viewport.
+5. Once solved, the generated `.glb` animation will play back automatically and download to your machine.

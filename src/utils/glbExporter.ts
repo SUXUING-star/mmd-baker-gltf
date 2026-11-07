@@ -1,7 +1,7 @@
-// src/glbExporter.ts
+
 import * as THREE from 'three';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
-import { HUMANOID_BONES, HumanoidBoneName, LandmarkData } from './types';
+import { HUMANOID_BONES, HumanoidBoneName, LandmarkData } from '../types/types';
 import { solveAllHumanoidQuaternions } from './mathSolver';
 
 export async function exportFull52HumanoidGLB(json: LandmarkData): Promise<Blob> {

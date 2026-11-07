@@ -1,11 +1,11 @@
-// src/mathSolver.ts
+
 import * as THREE from 'three';
-import { HUMANOID_BONES, HumanoidBoneName, LandmarkData } from './types';
-import { ensureQuatContinuity } from './solvers/mathUtils';
-import { solveHips } from './solvers/hipsSolver';
-import { solveSpine } from './solvers/spineSolver';
-import { solveLimbs } from './solvers/limbSolver';
-import { solveFingers } from './solvers/fingerSolver';
+import { HUMANOID_BONES, HumanoidBoneName, LandmarkData } from '../types/types';
+import { ensureQuatContinuity } from '../solvers/mathUtils';
+import { solveHips } from '../solvers/hipsSolver';
+import { solveSpine } from '../solvers/spineSolver';
+import { solveLimbs } from '../solvers/limbSolver';
+import { solveFingers } from '../solvers/fingerSolver';
 
 export function solveAllHumanoidQuaternions(data: LandmarkData) {
   const { frames } = data;

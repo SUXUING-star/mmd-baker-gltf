@@ -3,8 +3,8 @@ import React, { useRef, useEffect, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { bakePure3DLandmarks } from './baker';
-import { exportFull52HumanoidGLB } from './glbExporter';
+import { bakePure3DLandmarks } from './utils/baker';
+import { exportFull52HumanoidGLB } from './utils/glbExporter';
 
 export default function App() {
   const [pmxFile, setPmxFile] = useState<File | null>(null);
