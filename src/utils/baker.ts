@@ -1,4 +1,4 @@
-
+// src/utils/baker.ts
 import * as THREE from 'three';
 import { MMDAnimationHelper } from 'three/examples/jsm/animation/MMDAnimationHelper.js';
 import { MMDLoader } from 'three/examples/jsm/loaders/MMDLoader.js';
@@ -8,11 +8,17 @@ export interface BakerRenderCallback {
   (mesh: THREE.SkinnedMesh, landmarks: Record<string, [number, number, number]>, progress: number): void;
 }
 
+export interface BakerResult {
+  landmarkData: LandmarkData;
+  mesh: THREE.SkinnedMesh;
+  animation: THREE.AnimationClip;
+}
+
 export async function bakePure3DLandmarks(
   pmxInput: File | string,
   vmdInput: File | string,
   onFrameRender?: BakerRenderCallback
-): Promise<LandmarkData> {
+): Promise<BakerResult> {
   let pmxUrl: string;
   let vmdUrl: string;
   let isPmxBlob = false;
@@ -106,10 +112,14 @@ export async function bakePure3DLandmarks(
     }
 
     return {
-      fps,
-      totalFrames,
-      duration: totalDuration,
-      frames: bakedFrames
+      landmarkData: {
+        fps,
+        totalFrames,
+        duration: totalDuration,
+        frames: bakedFrames
+      },
+      mesh,
+      animation
     };
   } finally {
     if (isPmxBlob) URL.revokeObjectURL(pmxUrl.split('#')[0]);

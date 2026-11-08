@@ -1,8 +1,10 @@
 // src/hooks/useMmdPipeline.ts
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { I18N, Lang } from '../i18n';
+import { LandmarkData } from '../types/types';
 import { bakePure3DLandmarks } from '../utils/baker';
 import { exportFull52HumanoidGLB } from '../utils/glbExporter';
+import { findBestLoopEndFrame, trimLandmarkData } from '../utils/motionTrimmer';
 import { exportFull52VRMA } from '../utils/vrmaExporter';
 
 export type ExportFormat = 'vrma' | 'glb' | 'both';
@@ -21,73 +23,183 @@ interface ThreeBridge {
   setMmdCamera: () => void;
   setHumanoidCamera: () => void;
   clearCurrentMesh: () => void;
+  setupMmdAnimation: (mesh: any, animation: any) => void;
+  setMmdTime: (time: number, landmarks?: Record<string, [number, number, number]>) => void;
   updateLandmarks: (mesh: any, landmarks: Record<string, [number, number, number]>) => void;
+  renderLandmarksPositions: (landmarks: Record<string, [number, number, number]>) => void;
   loadAndPlayGLB: (url: string) => Promise<void>;
 }
 
-type PipelineStatusState =
-  | { type: 'ready' }
-  | { type: 'baking_landmarks' }
-  | { type: 'solving_humanoid' }
-  | { type: 'complete' }
-  | { type: 'error'; message: string };
+type StatusType = 'ready' | 'analyzing' | 'ready_to_export' | 'exporting' | 'complete' | 'error';
 
 export function useMmdPipeline(threeBridge: ThreeBridge, lang: Lang = 'zh') {
-  const [statusState, setStatusState] = useState<PipelineStatusState>({ type: 'ready' });
+  const [statusType, setStatusType] = useState<StatusType>('ready');
+  const [errorMessage, setErrorMessage] = useState<string>('');
   const [progress, setProgress] = useState<number>(0);
-  const [baking, setBaking] = useState<boolean>(false);
+  const [processing, setProcessing] = useState<boolean>(false);
   const [exportFormat, setExportFormat] = useState<ExportFormat>('both');
   const [downloads, setDownloads] = useState<PipelineDownloadResult | null>(null);
 
+  const rawLandmarkDataRef = useRef<LandmarkData | null>(null);
+
+  const [maxFrames, setMaxFrames] = useState<number>(0);
+  const [fps, setFps] = useState<number>(30);
+  const [currentFrame, setCurrentFrame] = useState<number>(0);
+  const [startFrame, setStartFrame] = useState<number>(0);
+  const [endFrame, setEndFrame] = useState<number>(0);
+  const [isPlaying, setIsPlaying] = useState<boolean>(false);
+
+  const timerRef = useRef<number | null>(null);
   const activeUrlsRef = useRef<string[]>([]);
+
   const cleanupUrls = () => {
     activeUrlsRef.current.forEach((u) => URL.revokeObjectURL(u));
     activeUrlsRef.current = [];
   };
 
-  useEffect(() => {
-    return cleanupUrls;
+  const stopPlayback = useCallback(() => {
+    if (timerRef.current !== null) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    setIsPlaying(false);
   }, []);
 
-  // 动态响应式生成多语言状态文本
-  const status = useMemo(() => {
-    const t = I18N[lang];
-    switch (statusState.type) {
-      case 'ready':
-        return t.statusReady;
-      case 'baking_landmarks':
-        return t.statusBakingLandmarks;
-      case 'solving_humanoid':
-        return t.statusSolvingHumanoid;
-      case 'complete':
-        return t.statusComplete;
-      case 'error':
-        return t.statusError(statusState.message);
-    }
-  }, [lang, statusState]);
+  useEffect(() => {
+    return () => {
+      stopPlayback();
+      cleanupUrls();
+    };
+  }, [stopPlayback]);
 
-  const runPipeline = useCallback(
-    async (pmxTarget: File | string, vmdTarget: File | string, format: ExportFormat = exportFormat) => {
+  // 跳转到指定帧，同时更新 3D 模型与红点
+  const seekToFrame = useCallback(
+    (frameIdx: number) => {
+      if (!rawLandmarkDataRef.current) return;
+      const frames = rawLandmarkDataRef.current.frames;
+      const safeIdx = Math.max(0, Math.min(frameIdx, frames.length - 1));
+      setCurrentFrame(safeIdx);
+      const targetFrame = frames[safeIdx];
+      if (targetFrame) {
+        threeBridge.setMmdTime(targetFrame.time, targetFrame.landmarks);
+      }
+    },
+    [threeBridge]
+  );
+
+  const togglePlay = useCallback(() => {
+    if (isPlaying) {
+      stopPlayback();
+      return;
+    }
+
+    if (!rawLandmarkDataRef.current || endFrame <= startFrame) return;
+
+    setIsPlaying(true);
+    const intervalMs = Math.round(1000 / (fps || 30));
+
+    timerRef.current = window.setInterval(() => {
+      setCurrentFrame((prev) => {
+        let next = prev + 1;
+        if (next > endFrame || next < startFrame) {
+          next = startFrame;
+        }
+        const targetFrame = rawLandmarkDataRef.current?.frames[next];
+        if (targetFrame) {
+          threeBridge.setMmdTime(targetFrame.time, targetFrame.landmarks);
+        }
+        return next;
+      });
+    }, intervalMs);
+  }, [isPlaying, startFrame, endFrame, fps, threeBridge, stopPlayback]);
+
+  const autoSnapLoopEnd = useCallback(() => {
+    if (!rawLandmarkDataRef.current) return;
+    const { bestFrameIndex } = findBestLoopEndFrame(rawLandmarkDataRef.current, startFrame, 30);
+    setEndFrame(bestFrameIndex);
+    seekToFrame(bestFrameIndex);
+  }, [startFrame, seekToFrame]);
+
+  const loadMotion = useCallback(
+    async (pmxTarget: File | string, vmdTarget: File | string) => {
       try {
-        setBaking(true);
+        stopPlayback();
+        setProcessing(true);
         setDownloads(null);
         cleanupUrls();
+        setStatusType('analyzing');
 
-        setStatusState({ type: 'baking_landmarks' });
         threeBridge.setMmdCamera();
         threeBridge.clearCurrentMesh();
 
-        const landmarkData = await bakePure3DLandmarks(
+        const { landmarkData, mesh, animation } = await bakePure3DLandmarks(
           pmxTarget,
           vmdTarget,
-          (mesh, landmarks, prog) => {
+          (m, landmarks, prog) => {
             setProgress(prog);
-            threeBridge.updateLandmarks(mesh, landmarks);
+            threeBridge.updateLandmarks(m, landmarks);
           }
         );
 
-        setStatusState({ type: 'solving_humanoid' });
+        rawLandmarkDataRef.current = landmarkData;
+        const total = landmarkData.totalFrames;
+        setMaxFrames(total);
+        setFps(landmarkData.fps);
+        setStartFrame(0);
+
+        let defaultEnd = Math.max(0, total - 1);
+        if (total > 30) {
+          const { bestFrameIndex } = findBestLoopEndFrame(landmarkData, 0, 30);
+          defaultEnd = bestFrameIndex;
+        }
+        setEndFrame(defaultEnd);
+        setCurrentFrame(0);
+
+        // 绑定 Mixer，使得后续可以用 setMmdTime 驱动模型动画
+        threeBridge.setupMmdAnimation(mesh, animation);
+
+        setStatusType('ready_to_export');
+
+        // 开启循环播放
+        setIsPlaying(true);
+        const intervalMs = Math.round(1000 / landmarkData.fps);
+        let playIdx = 0;
+        timerRef.current = window.setInterval(() => {
+          playIdx++;
+          if (playIdx > defaultEnd) playIdx = 0;
+          setCurrentFrame(playIdx);
+          const targetFrame = landmarkData.frames[playIdx];
+          if (targetFrame) {
+            threeBridge.setMmdTime(targetFrame.time, targetFrame.landmarks);
+          }
+        }, intervalMs);
+      } catch (err: unknown) {
+        console.error(err);
+        const msg = err instanceof Error ? err.message : String(err);
+        setStatusType('error');
+        setErrorMessage(msg);
+      } finally {
+        setProcessing(false);
+      }
+    },
+    [threeBridge, stopPlayback]
+  );
+
+  const exportMotion = useCallback(
+    async (vmdTarget: File | string, format: ExportFormat = exportFormat) => {
+      if (!rawLandmarkDataRef.current) return;
+
+      try {
+        stopPlayback();
+        setProcessing(true);
+        setStatusType('exporting');
         threeBridge.setHumanoidCamera();
+
+        const trimmedData = trimLandmarkData(
+          rawLandmarkDataRef.current,
+          startFrame,
+          endFrame
+        );
 
         const baseName =
           typeof vmdTarget === 'string'
@@ -96,18 +208,16 @@ export function useMmdPipeline(threeBridge: ThreeBridge, lang: Lang = 'zh') {
 
         const result: PipelineDownloadResult = {};
 
-        // 导出 GLB
         if (format === 'glb' || format === 'both') {
-          const glbBlob = await exportFull52HumanoidGLB(landmarkData);
+          const glbBlob = await exportFull52HumanoidGLB(trimmedData);
           const glbUrl = URL.createObjectURL(glbBlob);
           activeUrlsRef.current.push(glbUrl);
           result.glb = { url: glbUrl, filename: `${baseName}_humanoid.glb` };
           await threeBridge.loadAndPlayGLB(glbUrl);
         }
 
-        // 导出带有 Metadata 的 VRMA
         if (format === 'vrma' || format === 'both') {
-          const vrmaBlob = await exportFull52VRMA(landmarkData, {
+          const vrmaBlob = await exportFull52VRMA(trimmedData, {
             title: baseName,
             authors: ['MMD Pipeline Converter'],
           });
@@ -121,17 +231,36 @@ export function useMmdPipeline(threeBridge: ThreeBridge, lang: Lang = 'zh') {
         }
 
         setDownloads(result);
-        setStatusState({ type: 'complete' });
+        setStatusType('complete');
       } catch (err: unknown) {
         console.error(err);
         const msg = err instanceof Error ? err.message : String(err);
-        setStatusState({ type: 'error', message: msg });
+        setStatusType('error');
+        setErrorMessage(msg);
       } finally {
-        setBaking(false);
+        setProcessing(false);
       }
     },
-    [threeBridge, exportFormat]
+    [threeBridge, exportFormat, startFrame, endFrame, stopPlayback]
   );
+
+  const status = useMemo(() => {
+    const t = I18N[lang];
+    switch (statusType) {
+      case 'ready':
+        return t.statusReady;
+      case 'analyzing':
+        return t.statusAnalyzing;
+      case 'ready_to_export':
+        return t.statusReadyToExport;
+      case 'exporting':
+        return t.statusSolvingHumanoid;
+      case 'complete':
+        return t.statusComplete;
+      case 'error':
+        return t.statusError(errorMessage);
+    }
+  }, [lang, statusType, errorMessage]);
 
   const downloadFile = (item: DownloadItem) => {
     const a = document.createElement('a');
@@ -142,12 +271,26 @@ export function useMmdPipeline(threeBridge: ThreeBridge, lang: Lang = 'zh') {
 
   return {
     status,
+    statusType,
     progress,
-    baking,
+    processing,
     exportFormat,
     setExportFormat,
     downloads,
-    runPipeline,
+    loadMotion,
+    exportMotion,
     downloadFile,
+    maxFrames,
+    fps,
+    currentFrame,
+    startFrame,
+    setStartFrame,
+    endFrame,
+    setEndFrame,
+    isPlaying,
+    togglePlay,
+    stopPlayback,
+    seekToFrame,
+    autoSnapLoopEnd,
   };
 }
