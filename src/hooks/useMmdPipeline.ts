@@ -1,5 +1,6 @@
 // src/hooks/useMmdPipeline.ts
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { I18N, Lang } from '../i18n';
 import { bakePure3DLandmarks } from '../utils/baker';
 import { exportFull52HumanoidGLB } from '../utils/glbExporter';
 import { exportFull52VRMA } from '../utils/vrmaExporter';
@@ -24,8 +25,15 @@ interface ThreeBridge {
   loadAndPlayGLB: (url: string) => Promise<void>;
 }
 
-export function useMmdPipeline(threeBridge: ThreeBridge) {
-  const [status, setStatus] = useState<string>('就绪：可放入动作文件或直接测试默认动作');
+type PipelineStatusState =
+  | { type: 'ready' }
+  | { type: 'baking_landmarks' }
+  | { type: 'solving_humanoid' }
+  | { type: 'complete' }
+  | { type: 'error'; message: string };
+
+export function useMmdPipeline(threeBridge: ThreeBridge, lang: Lang = 'zh') {
+  const [statusState, setStatusState] = useState<PipelineStatusState>({ type: 'ready' });
   const [progress, setProgress] = useState<number>(0);
   const [baking, setBaking] = useState<boolean>(false);
   const [exportFormat, setExportFormat] = useState<ExportFormat>('both');
@@ -41,6 +49,23 @@ export function useMmdPipeline(threeBridge: ThreeBridge) {
     return cleanupUrls;
   }, []);
 
+  // 动态响应式生成多语言状态文本
+  const status = useMemo(() => {
+    const t = I18N[lang];
+    switch (statusState.type) {
+      case 'ready':
+        return t.statusReady;
+      case 'baking_landmarks':
+        return t.statusBakingLandmarks;
+      case 'solving_humanoid':
+        return t.statusSolvingHumanoid;
+      case 'complete':
+        return t.statusComplete;
+      case 'error':
+        return t.statusError(statusState.message);
+    }
+  }, [lang, statusState]);
+
   const runPipeline = useCallback(
     async (pmxTarget: File | string, vmdTarget: File | string, format: ExportFormat = exportFormat) => {
       try {
@@ -48,7 +73,7 @@ export function useMmdPipeline(threeBridge: ThreeBridge) {
         setDownloads(null);
         cleanupUrls();
 
-        setStatus('1/2 抓取 MMD 动作 3D 世界坐标...');
+        setStatusState({ type: 'baking_landmarks' });
         threeBridge.setMmdCamera();
         threeBridge.clearCurrentMesh();
 
@@ -61,7 +86,7 @@ export function useMmdPipeline(threeBridge: ThreeBridge) {
           }
         );
 
-        setStatus('2/2 求解骨骼并导出动画数据...');
+        setStatusState({ type: 'solving_humanoid' });
         threeBridge.setHumanoidCamera();
 
         const baseName =
@@ -96,11 +121,11 @@ export function useMmdPipeline(threeBridge: ThreeBridge) {
         }
 
         setDownloads(result);
-        setStatus('解算完成！动画已在视口播放，可直接下载对应文件。');
+        setStatusState({ type: 'complete' });
       } catch (err: unknown) {
         console.error(err);
         const msg = err instanceof Error ? err.message : String(err);
-        setStatus(`错误: ${msg}`);
+        setStatusState({ type: 'error', message: msg });
       } finally {
         setBaking(false);
       }

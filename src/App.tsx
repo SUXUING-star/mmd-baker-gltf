@@ -1,17 +1,22 @@
 // src/App.tsx
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { ExportFormat, useMmdPipeline } from './hooks/useMmdPipeline';
 import { useThreeScene } from './hooks/useThreeScene';
+import { detectInitialLanguage, I18N, Lang } from './i18n';
 
 const DEFAULT_PMX_PATH = '/ganyu_by_原神/甘雨.pmx';
 const DEFAULT_VMD_PATH = '/奶蛙上掌下拳.vmd';
 
 export default function App() {
+  const [lang, setLang] = useState<Lang>(detectInitialLanguage);
   const [customPmxFile, setCustomPmxFile] = useState<File | null>(null);
   const [vmdFile, setVmdFile] = useState<File | null>(null);
 
+  const t = useMemo(() => I18N[lang], [lang]);
+
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const threeBridge = useThreeScene(canvasContainerRef);
+  // 传入 lang 参数，状态文字便会跟随语言切换实时变化
   const {
     status,
     progress,
@@ -21,9 +26,14 @@ export default function App() {
     downloads,
     runPipeline,
     downloadFile,
-  } = useMmdPipeline(threeBridge);
+  } = useMmdPipeline(threeBridge, lang);
 
   const activePmxTarget = customPmxFile || DEFAULT_PMX_PATH;
+
+  const switchLanguage = (newLang: Lang) => {
+    setLang(newLang);
+    localStorage.setItem('app_lang', newLang);
+  };
 
   const handleVmdDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -32,13 +42,50 @@ export default function App() {
     if (file && file.name.toLowerCase().endsWith('.vmd')) {
       setVmdFile(file);
     } else {
-      alert('请放入正确的 .vmd 动作文件！');
+      alert(t.vmdAlert);
     }
   };
 
   return (
     <div style={{ maxWidth: 960, margin: '20px auto', padding: '0 20px', fontFamily: 'system-ui, sans-serif' }}>
-      <h2 style={{ marginBottom: 12, color: '#222' }}>MMD 动作转 Humanoid / VRMA 动捕解算器</h2>
+      {/* 头部：标题与右上角语言切换 */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <h2 style={{ margin: 0, color: '#222', fontSize: 20 }}>{t.title}</h2>
+        <div style={{ display: 'flex', gap: 4, background: '#f0f0f0', padding: 3, borderRadius: 6 }}>
+          <button
+            onClick={() => switchLanguage('zh')}
+            style={{
+              border: 'none',
+              borderRadius: 4,
+              padding: '4px 10px',
+              fontSize: 12,
+              cursor: 'pointer',
+              background: lang === 'zh' ? '#1677ff' : 'transparent',
+              color: lang === 'zh' ? '#fff' : '#666',
+              fontWeight: lang === 'zh' ? 600 : 400,
+              transition: 'all 0.2s',
+            }}
+          >
+            中文
+          </button>
+          <button
+            onClick={() => switchLanguage('en')}
+            style={{
+              border: 'none',
+              borderRadius: 4,
+              padding: '4px 10px',
+              fontSize: 12,
+              cursor: 'pointer',
+              background: lang === 'en' ? '#1677ff' : 'transparent',
+              color: lang === 'en' ? '#fff' : '#666',
+              fontWeight: lang === 'en' ? 600 : 400,
+              transition: 'all 0.2s',
+            }}
+          >
+            English
+          </button>
+        </div>
+      </div>
 
       {/* 3D 渲染视口 */}
       <div
@@ -55,12 +102,12 @@ export default function App() {
 
       {/* 状态与进度 */}
       <div style={{ padding: '10px 14px', background: '#f0f5ff', borderRadius: 6, marginBottom: 14, fontSize: 14, color: '#1d39c4' }}>
-        <strong>解算状态：</strong> {status} {baking && `(${progress}%)`}
+        <strong>{t.statusLabel}</strong> {status} {baking && `(${progress}%)`}
       </div>
 
       {/* 格式选项设置栏 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '10px 14px', background: '#fafafa', border: '1px solid #eee', borderRadius: 6, marginBottom: 14 }}>
-        <strong style={{ fontSize: 14, color: '#333' }}>导出格式选择：</strong>
+        <strong style={{ fontSize: 14, color: '#333' }}>{t.exportFormatLabel}</strong>
         {(['both', 'vrma', 'glb'] as ExportFormat[]).map((fmt) => (
           <label key={fmt} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 14 }}>
             <input
@@ -71,7 +118,7 @@ export default function App() {
               disabled={baking}
               onChange={(e) => setExportFormat(e.target.value as ExportFormat)}
             />
-            {fmt === 'both' ? '同时生成 VRMA + GLB' : fmt === 'vrma' ? 'VRM 动画 (.vrma)' : 'Humanoid 模型 (.glb)'}
+            {fmt === 'both' ? t.formatBoth : fmt === 'vrma' ? t.formatVrma : t.formatGlb}
           </label>
         ))}
       </div>
@@ -79,9 +126,9 @@ export default function App() {
       {/* 模型与动作投递区 */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 14, marginBottom: 16 }}>
         <div style={{ border: '1px solid #e0e0e0', borderRadius: 8, padding: 14, background: '#fafafa' }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#666' }}>基准绑定模型</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#666' }}>{t.baseModel}</span>
           <div style={{ margin: '8px 0', fontSize: 14, fontWeight: 500, color: '#222' }}>
-            {customPmxFile ? customPmxFile.name : '默认模型 (甘雨.pmx)'}
+            {customPmxFile ? customPmxFile.name : t.defaultModelName}
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <input
@@ -93,11 +140,11 @@ export default function App() {
               onChange={(e) => setCustomPmxFile(e.target.files?.[0] || null)}
             />
             <button onClick={() => document.getElementById('pmx-input')?.click()} disabled={baking} style={{ fontSize: 12, padding: '4px 8px', cursor: 'pointer' }}>
-              {customPmxFile ? '更换其他模型' : '更换自定义模型'}
+              {customPmxFile ? t.changeModel : t.customModel}
             </button>
             {customPmxFile && (
               <button onClick={() => setCustomPmxFile(null)} disabled={baking} style={{ fontSize: 12, padding: '4px 8px', cursor: 'pointer' }}>
-                切回默认模型
+                {t.resetDefaultModel}
               </button>
             )}
           </div>
@@ -129,10 +176,10 @@ export default function App() {
             onChange={(e) => setVmdFile(e.target.files?.[0] || null)}
           />
           <h4 style={{ margin: '0 0 6px 0', color: '#1677ff' }}>
-            {vmdFile ? `已载入动作: ${vmdFile.name}` : '点击选择 或 拖入待转换的 .vmd 动作文件'}
+            {vmdFile ? t.vmdLoaded(vmdFile.name) : t.vmdPlaceholder}
           </h4>
           <span style={{ fontSize: 12, color: '#888' }}>
-            基于当前模型计算 3D 关节点并导出
+            {t.vmdHint}
           </span>
         </div>
       </div>
@@ -154,7 +201,7 @@ export default function App() {
             cursor: baking || !vmdFile ? 'not-allowed' : 'pointer',
           }}
         >
-          {baking ? `正在烘焙解算 (${progress}%)...` : '开始转换此动作'}
+          {baking ? t.bakingProgress(progress) : t.startConvert}
         </button>
 
         <button
@@ -172,7 +219,7 @@ export default function App() {
             cursor: baking ? 'not-allowed' : 'pointer',
           }}
         >
-          测试默认动作 (奶蛙上掌下拳)
+          {t.testDefaultBtn}
         </button>
       </div>
 
@@ -180,7 +227,7 @@ export default function App() {
       {downloads && (
         <div style={{ padding: '14px 18px', background: '#f6ffed', border: '1px solid #b7eb8f', borderRadius: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ color: '#389e0d', fontSize: 14, fontWeight: 500 }}>
-            ✓ 转换完成，请选择下载格式：
+            {t.convertComplete}
           </span>
           <div style={{ display: 'flex', gap: 10 }}>
             {downloads.vrma && (
@@ -197,7 +244,7 @@ export default function App() {
                   cursor: 'pointer',
                 }}
               >
-                下载 VRMA 动作 (.vrma)
+                {t.downloadVrma}
               </button>
             )}
             {downloads.glb && (
@@ -214,7 +261,7 @@ export default function App() {
                   cursor: 'pointer',
                 }}
               >
-                下载 Humanoid GLB
+                {t.downloadGlb}
               </button>
             )}
           </div>
