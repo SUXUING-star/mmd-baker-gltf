@@ -8,7 +8,7 @@ export default function App() {
   const [vmdFile, setVmdFile] = useState<File | null>(null);
 
   const demoPmxPath = '/ganyu_by_原神/甘雨.pmx';
-  const demoVmdPath = '/动作.vmd';
+  const demoVmdPath = '/奶蛙上掌下拳.vmd';
 
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const threeBridge = useThreeScene(canvasContainerRef);
