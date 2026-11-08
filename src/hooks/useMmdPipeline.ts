@@ -2,6 +2,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { bakePure3DLandmarks } from '../utils/baker';
 import { exportFull52HumanoidGLB } from '../utils/glbExporter';
+import { exportFull52VRMA } from '../utils/vrmaExporter';
+
+export type ExportFormat = 'vrma' | 'glb' | 'both';
+
+export interface DownloadItem {
+  url: string;
+  filename: string;
+}
+
+export interface PipelineDownloadResult {
+  glb?: DownloadItem;
+  vrma?: DownloadItem;
+}
 
 interface ThreeBridge {
   setMmdCamera: () => void;
@@ -12,85 +25,104 @@ interface ThreeBridge {
 }
 
 export function useMmdPipeline(threeBridge: ThreeBridge) {
-  const [status, setStatus] = useState<string>('就绪：可拖拽本地文件或直接使用内置演示测试');
+  const [status, setStatus] = useState<string>('就绪：可放入动作文件或直接测试默认动作');
   const [progress, setProgress] = useState<number>(0);
   const [baking, setBaking] = useState<boolean>(false);
-  const [downloadInfo, setDownloadInfo] = useState<{ url: string; filename: string } | null>(null);
+  const [exportFormat, setExportFormat] = useState<ExportFormat>('both');
+  const [downloads, setDownloads] = useState<PipelineDownloadResult | null>(null);
 
-  // 清理 URL 对象防内存泄露
-  const activeUrlRef = useRef<string | null>(null);
+  const activeUrlsRef = useRef<string[]>([]);
+  const cleanupUrls = () => {
+    activeUrlsRef.current.forEach((u) => URL.revokeObjectURL(u));
+    activeUrlsRef.current = [];
+  };
+
   useEffect(() => {
-    return () => {
-      if (activeUrlRef.current) {
-        URL.revokeObjectURL(activeUrlRef.current);
-      }
-    };
+    return cleanupUrls;
   }, []);
 
-  const runPipeline = useCallback(async (pmxTarget: File | string, vmdTarget: File | string) => {
-    try {
-      setBaking(true);
-      setDownloadInfo(null);
-      setStatus('1/2 抓取 MMD 动作 3D 世界坐标...');
+  const runPipeline = useCallback(
+    async (pmxTarget: File | string, vmdTarget: File | string, format: ExportFormat = exportFormat) => {
+      try {
+        setBaking(true);
+        setDownloads(null);
+        cleanupUrls();
 
-      threeBridge.setMmdCamera();
-      threeBridge.clearCurrentMesh();
+        setStatus('1/2 抓取 MMD 动作 3D 世界坐标...');
+        threeBridge.setMmdCamera();
+        threeBridge.clearCurrentMesh();
 
-      const landmarkData = await bakePure3DLandmarks(
-        pmxTarget,
-        vmdTarget,
-        (mesh, landmarks, prog) => {
-          setProgress(prog);
-          threeBridge.updateLandmarks(mesh, landmarks);
+        const landmarkData = await bakePure3DLandmarks(
+          pmxTarget,
+          vmdTarget,
+          (mesh, landmarks, prog) => {
+            setProgress(prog);
+            threeBridge.updateLandmarks(mesh, landmarks);
+          }
+        );
+
+        setStatus('2/2 求解骨骼并导出动画数据...');
+        threeBridge.setHumanoidCamera();
+
+        const baseName =
+          typeof vmdTarget === 'string'
+            ? 'output_motion'
+            : vmdTarget.name.replace(/\.[^/.]+$/, '');
+
+        const result: PipelineDownloadResult = {};
+
+        // 导出 GLB
+        if (format === 'glb' || format === 'both') {
+          const glbBlob = await exportFull52HumanoidGLB(landmarkData);
+          const glbUrl = URL.createObjectURL(glbBlob);
+          activeUrlsRef.current.push(glbUrl);
+          result.glb = { url: glbUrl, filename: `${baseName}_humanoid.glb` };
+          await threeBridge.loadAndPlayGLB(glbUrl);
         }
-      );
 
-      setStatus('2/2 运行解算引擎并构建 Humanoid GLB...');
-      const glbBlob = await exportFull52HumanoidGLB(landmarkData);
+        // 导出带有 Metadata 的 VRMA
+        if (format === 'vrma' || format === 'both') {
+          const vrmaBlob = await exportFull52VRMA(landmarkData, {
+            title: baseName,
+            authors: ['MMD Pipeline Converter'],
+          });
+          const vrmaUrl = URL.createObjectURL(vrmaBlob);
+          activeUrlsRef.current.push(vrmaUrl);
+          result.vrma = { url: vrmaUrl, filename: `${baseName}.vrma` };
 
-      // 解算完成，切换相机到人物高度中心
-      threeBridge.setHumanoidCamera();
+          if (format === 'vrma') {
+            await threeBridge.loadAndPlayGLB(vrmaUrl);
+          }
+        }
 
-      // 释放旧的 Blob URL
-      if (activeUrlRef.current) URL.revokeObjectURL(activeUrlRef.current);
+        setDownloads(result);
+        setStatus('解算完成！动画已在视口播放，可直接下载对应文件。');
+      } catch (err: unknown) {
+        console.error(err);
+        const msg = err instanceof Error ? err.message : String(err);
+        setStatus(`错误: ${msg}`);
+      } finally {
+        setBaking(false);
+      }
+    },
+    [threeBridge, exportFormat]
+  );
 
-      const glbUrl = URL.createObjectURL(glbBlob);
-      activeUrlRef.current = glbUrl;
-
-      // 视口中载入解算后的 GLB
-      await threeBridge.loadAndPlayGLB(glbUrl);
-
-      const filename = typeof pmxTarget === 'string'
-        ? 'output_humanoid.glb'
-        : `${pmxTarget.name.replace('.pmx', '')}_humanoid.glb`;
-
-      // 仅存储下载元数据，不自动触发下载！
-      setDownloadInfo({ url: glbUrl, filename });
-      setStatus('解算完成！GLB 已在视口播放，可点击下方按钮下载。');
-    } catch (err: unknown) {
-      console.error(err);
-      const msg = err instanceof Error ? err.message : String(err);
-      setStatus(`错误: ${msg}`);
-    } finally {
-      setBaking(false);
-    }
-  }, [threeBridge]);
-
-  // 手动下载触发器
-  const triggerDownload = useCallback(() => {
-    if (!downloadInfo) return;
+  const downloadFile = (item: DownloadItem) => {
     const a = document.createElement('a');
-    a.href = downloadInfo.url;
-    a.download = downloadInfo.filename;
+    a.href = item.url;
+    a.download = item.filename;
     a.click();
-  }, [downloadInfo]);
+  };
 
   return {
     status,
     progress,
     baking,
-    downloadInfo,
+    exportFormat,
+    setExportFormat,
+    downloads,
     runPipeline,
-    triggerDownload
+    downloadFile,
   };
 }

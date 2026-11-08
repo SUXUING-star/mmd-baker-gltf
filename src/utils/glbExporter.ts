@@ -1,4 +1,4 @@
-
+// src/utils/glbExporter.ts
 import * as THREE from 'three';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 import { HUMANOID_BONES, HumanoidBoneName, LandmarkData } from '../types/types';
@@ -13,7 +13,7 @@ export async function exportFull52HumanoidGLB(json: LandmarkData): Promise<Blob>
     bones[name].name = name;
   });
 
-  // T-Pose 骨骸默认局部偏移
+  // T-Pose 局部偏移
   bones.hips.position.set(0, 0.95, 0);
   bones.spine.position.set(0, 0.12, 0);
   bones.chest.position.set(0, 0.14, 0);
@@ -41,7 +41,7 @@ export async function exportFull52HumanoidGLB(json: LandmarkData): Promise<Blob>
   bones.rightFoot.position.set(0, -0.40, 0);
   bones.rightToes.position.set(0, -0.05, 0.14);
 
-  // 构建骨骼层级树
+  // 骨骼树构建
   bones.hips.add(bones.spine);
   bones.spine.add(bones.chest);
   bones.chest.add(bones.upperChest);
@@ -60,15 +60,14 @@ export async function exportFull52HumanoidGLB(json: LandmarkData): Promise<Blob>
 
   bones.upperChest.add(bones.leftShoulder);
   bones.leftShoulder.add(bones.leftUpperArm);
-  bones.leftUpperArm.add(bones.leftLowerArm);
+  bones.leftShoulder.add(bones.leftLowerArm);
   bones.leftLowerArm.add(bones.leftHand);
 
   bones.upperChest.add(bones.rightShoulder);
   bones.rightShoulder.add(bones.rightUpperArm);
-  bones.rightUpperArm.add(bones.rightLowerArm);
+  bones.rightShoulder.add(bones.rightLowerArm);
   bones.rightLowerArm.add(bones.rightHand);
 
-  // 挂载手指
   const fingerList = HUMANOID_BONES.filter((b) =>
     b.includes('Thumb') || b.includes('Index') || b.includes('Middle') || b.includes('Ring') || b.includes('Little')
   );
@@ -86,7 +85,7 @@ export async function exportFull52HumanoidGLB(json: LandmarkData): Promise<Blob>
   bones.rightHand.add(bones.rightRingProximal); bones.rightRingProximal.add(bones.rightRingIntermediate); bones.rightRingIntermediate.add(bones.rightRingDistal);
   bones.rightHand.add(bones.rightLittleProximal); bones.rightLittleProximal.add(bones.rightLittleIntermediate); bones.rightLittleIntermediate.add(bones.rightLittleDistal);
 
-  // 完美蒙皮 Mesh 属性绑定，解决 glTF Validator 报错
+  // 绑定虚拟蒙皮，通过 Validator 校验
   const boneArray = HUMANOID_BONES.map((n) => bones[n]);
   const skeleton = new THREE.Skeleton(boneArray);
   const dummyGeometry = new THREE.BoxGeometry(0.1, 0.1, 0.1);
@@ -99,11 +98,7 @@ export async function exportFull52HumanoidGLB(json: LandmarkData): Promise<Blob>
     skinIndices[i * 4 + 1] = 1;
     skinIndices[i * 4 + 2] = 2;
     skinIndices[i * 4 + 3] = 3;
-
     skinWeights[i * 4 + 0] = 1.0;
-    skinWeights[i * 4 + 1] = 0.0;
-    skinWeights[i * 4 + 2] = 0.0;
-    skinWeights[i * 4 + 3] = 0.0;
   }
 
   dummyGeometry.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(skinIndices, 4));
@@ -114,7 +109,7 @@ export async function exportFull52HumanoidGLB(json: LandmarkData): Promise<Blob>
   skinnedMesh.bind(skeleton);
   scene.add(skinnedMesh);
 
-  // 算得四元数轨道
+  // 关键帧四元数求解
   const { times, hipsPositions, quatTracksData } = solveAllHumanoidQuaternions(json);
 
   const tracks: THREE.KeyframeTrack[] = [];
