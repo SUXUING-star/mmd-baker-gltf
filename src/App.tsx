@@ -8,8 +8,13 @@ import { useMmdPipeline } from './hooks/useMmdPipeline';
 import { useThreeScene } from './hooks/useThreeScene';
 import { detectInitialLanguage, I18N, Lang } from './i18n';
 
-const DEFAULT_PMX_PATH = '/ganyu_by_原神/甘雨.pmx';
-const DEFAULT_VMD_PATH = '/奶蛙上掌下拳.vmd';
+// 拼接 Vite 的 base 路径（兼容带斜杠和不带斜杠的情况）
+const BASE = import.meta.env.BASE_URL.endsWith('/')
+  ? import.meta.env.BASE_URL
+  : `${import.meta.env.BASE_URL}/`;
+
+const DEFAULT_PMX_PATH = `${BASE}ganyu_by_原神/甘雨.pmx`;
+const DEFAULT_VMD_PATH = `${BASE}奶蛙上掌下拳.vmd`;
 
 export default function App() {
   const [lang, setLang] = useState<Lang>(detectInitialLanguage);
