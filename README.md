@@ -1,6 +1,4 @@
-去掉了不必要的修饰词、大量括号和过度加粗，整体排版更接近 GitHub 原生维护者编写的简洁干净风格：
 
-```markdown
 # MMD to Humanoid & VRMA Motion Converter
 
 Convert MMD motion files (`.vmd`) into standard Humanoid GLB and VRMA animations directly in your browser.
