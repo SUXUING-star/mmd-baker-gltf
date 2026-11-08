@@ -5,7 +5,7 @@ import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 import { HUMANOID_BONES, HumanoidBoneName, LandmarkData } from '../types/types';
 import { solveAllHumanoidQuaternions } from './mathSolver';
 
-/** VRMA 元数据配置 */
+/** VRMA 元数据配置接口 */
 export interface VrmaMetaOptions {
   title?: string;
   authors?: string[];
@@ -148,14 +148,16 @@ export async function exportFull52VRMA(
 
         const gltfJson = writer.json;
 
-        // 填写 Asset 信息与 Metadata
+        // 写入用户实际配置的 Asset 与 Metadata
         gltfJson.asset = gltfJson.asset || {};
         gltfJson.asset.generator = 'MMD-to-Humanoid Solver (Pixiv VRMC_vrm_animation 1.0)';
         gltfJson.asset.extras = {
-          title: metaOptions?.title || 'MMD Converted VRMA Motion',
-          authors: metaOptions?.authors || ['MMD Pipeline Solver'],
-          copyrightInformation: metaOptions?.copyrightInformation || '',
-          licenseUrl: metaOptions?.licenseUrl || 'https://vrm.dev/licenses/1.0/',
+          title: metaOptions?.title?.trim() || 'Untitled VRMA Motion',
+          authors: (metaOptions?.authors && metaOptions.authors.length > 0)
+            ? metaOptions.authors
+            : ['Unknown'],
+          copyrightInformation: metaOptions?.copyrightInformation?.trim() || '',
+          licenseUrl: metaOptions?.licenseUrl?.trim() || 'https://vrm.dev/licenses/1.0/',
         };
 
         // 写入 extensions

@@ -1,37 +1,16 @@
 // src/components/ClipSection.tsx
 import React from 'react';
+import { TimelineController } from '../hooks/useMmdPipeline';
 
 interface ClipSectionProps {
   t: any;
-  maxFrames: number;
-  fps: number;
-  currentFrame: number;
-  startFrame: number;
-  endFrame: number;
-  isPlaying: boolean;
-  processing: boolean;
-  onTogglePlay: () => void;
-  onSeek: (frame: number) => void;
-  onStartFrameChange: (frame: number) => void;
-  onEndFrameChange: (frame: number) => void;
-  onAutoSnapLoopEnd: () => void;
+  timeline: TimelineController;
+  disabled?: boolean;
 }
 
-export const ClipSection: React.FC<ClipSectionProps> = ({
-  t,
-  maxFrames,
-  fps,
-  currentFrame,
-  startFrame,
-  endFrame,
-  isPlaying,
-  processing,
-  onTogglePlay,
-  onSeek,
-  onStartFrameChange,
-  onEndFrameChange,
-  onAutoSnapLoopEnd,
-}) => {
+export const ClipSection: React.FC<ClipSectionProps> = ({ t, timeline, disabled = false }) => {
+  const { maxFrames, fps, currentFrame, startFrame, endFrame, isPlaying, togglePlay, seek, setStart, setEnd, autoSnapLoopEnd } = timeline;
+
   if (maxFrames === 0) return null;
 
   return (
@@ -40,8 +19,8 @@ export const ClipSection: React.FC<ClipSectionProps> = ({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button
-            onClick={onTogglePlay}
-            disabled={processing}
+            onClick={togglePlay}
+            disabled={disabled}
             style={{
               padding: '6px 16px',
               background: isPlaying ? '#ff4d4f' : '#1677ff',
@@ -50,7 +29,7 @@ export const ClipSection: React.FC<ClipSectionProps> = ({
               borderRadius: 4,
               fontWeight: 600,
               fontSize: 13,
-              cursor: processing ? 'not-allowed' : 'pointer',
+              cursor: disabled ? 'not-allowed' : 'pointer',
             }}
           >
             {isPlaying ? t.pause : t.play}
@@ -61,8 +40,8 @@ export const ClipSection: React.FC<ClipSectionProps> = ({
         </div>
 
         <button
-          onClick={onAutoSnapLoopEnd}
-          disabled={processing}
+          onClick={autoSnapLoopEnd}
+          disabled={disabled}
           style={{
             fontSize: 12,
             padding: '5px 12px',
@@ -70,7 +49,7 @@ export const ClipSection: React.FC<ClipSectionProps> = ({
             color: '#fff',
             border: 'none',
             borderRadius: 4,
-            cursor: processing ? 'not-allowed' : 'pointer',
+            cursor: disabled ? 'not-allowed' : 'pointer',
             fontWeight: 600,
           }}
         >
@@ -78,15 +57,15 @@ export const ClipSection: React.FC<ClipSectionProps> = ({
         </button>
       </div>
 
-      {/* 播放条指针滑块 (60fps 同步视口) */}
+      {/* 播放条指针滑块 */}
       <div style={{ marginBottom: 12 }}>
         <input
           type="range"
           min={0}
           max={maxFrames - 1}
           value={currentFrame}
-          disabled={processing}
-          onChange={(e) => onSeek(Number(e.target.value))}
+          disabled={disabled}
+          onChange={(e) => seek(Number(e.target.value))}
           style={{ width: '100%', cursor: 'pointer' }}
         />
       </div>
@@ -103,8 +82,8 @@ export const ClipSection: React.FC<ClipSectionProps> = ({
             min={0}
             max={Math.max(0, endFrame - 1)}
             value={startFrame}
-            disabled={processing}
-            onChange={(e) => onStartFrameChange(Number(e.target.value))}
+            disabled={disabled}
+            onChange={(e) => setStart(Number(e.target.value))}
             style={{ width: '100%', marginTop: 4 }}
           />
         </div>
@@ -119,8 +98,8 @@ export const ClipSection: React.FC<ClipSectionProps> = ({
             min={startFrame + 1}
             max={maxFrames - 1}
             value={endFrame}
-            disabled={processing}
-            onChange={(e) => onEndFrameChange(Number(e.target.value))}
+            disabled={disabled}
+            onChange={(e) => setEnd(Number(e.target.value))}
             style={{ width: '100%', marginTop: 4 }}
           />
         </div>

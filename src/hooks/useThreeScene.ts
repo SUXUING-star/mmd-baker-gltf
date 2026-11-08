@@ -2,7 +2,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 export function useThreeScene(containerRef: React.RefObject<HTMLDivElement | null>) {
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -10,7 +9,6 @@ export function useThreeScene(containerRef: React.RefObject<HTMLDivElement | nul
   const controlsRef = useRef<OrbitControls | null>(null);
   const pointsGroupRef = useRef<THREE.Group | null>(null);
   const currentMeshRef = useRef<THREE.Object3D | null>(null);
-  const skeletonHelperRef = useRef<THREE.SkeletonHelper | null>(null);
   const mixerRef = useRef<THREE.AnimationMixer | null>(null);
 
   const sphereGeoRef = useRef<THREE.SphereGeometry>(new THREE.SphereGeometry(0.12, 8, 8));
@@ -20,7 +18,7 @@ export function useThreeScene(containerRef: React.RefObject<HTMLDivElement | nul
     if (!containerRef.current) return;
 
     const width = containerRef.current.clientWidth;
-    const height = 380; // 优化高度，留出空间给 UI 和页面滚动条
+    const height = 380;
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0xffffff);
@@ -55,7 +53,7 @@ export function useThreeScene(containerRef: React.RefObject<HTMLDivElement | nul
     scene.add(gridHelper);
 
     const pointsGroup = new THREE.Group();
-    pointsGroup.renderOrder = 999; // 让关节点小红球保持前端显示
+    pointsGroup.renderOrder = 999;
     scene.add(pointsGroup);
     pointsGroupRef.current = pointsGroup;
 
@@ -64,7 +62,6 @@ export function useThreeScene(containerRef: React.RefObject<HTMLDivElement | nul
     const renderLoop = () => {
       animId = requestAnimationFrame(renderLoop);
       const delta = clock.getDelta();
-      // 如果处于自动播放状态（GLB/VRMA），则更新 mixer
       if (mixerRef.current && mixerRef.current.timeScale !== 0) {
         mixerRef.current.update(delta);
       }
@@ -87,25 +84,26 @@ export function useThreeScene(containerRef: React.RefObject<HTMLDivElement | nul
     controlsRef.current.update();
   }, []);
 
-  const setHumanoidCamera = useCallback(() => {
-    if (!cameraRef.current || !controlsRef.current) return;
-    cameraRef.current.position.set(0, 1.2, 2.5);
-    controlsRef.current.target.set(0, 0.9, 0);
-    controlsRef.current.update();
+  const clearPoints = useCallback(() => {
+    if (pointsGroupRef.current) {
+      pointsGroupRef.current.clear();
+    }
   }, []);
 
   const clearCurrentMesh = useCallback(() => {
     const scene = sceneRef.current;
     if (!scene) return;
-    if (currentMeshRef.current) scene.remove(currentMeshRef.current);
-    if (skeletonHelperRef.current) scene.remove(skeletonHelperRef.current);
+    if (currentMeshRef.current) {
+      scene.remove(currentMeshRef.current);
+      currentMeshRef.current = null;
+    }
     if (mixerRef.current) {
       mixerRef.current.stopAllAction();
       mixerRef.current = null;
     }
-  }, []);
+    clearPoints();
+  }, [clearPoints]);
 
-  // 挂载 MMD 模型与 Track，提供手动时间控制
   const setupMmdAnimation = useCallback(
     (mesh: THREE.SkinnedMesh, animation: THREE.AnimationClip) => {
       clearCurrentMesh();
@@ -118,13 +116,12 @@ export function useThreeScene(containerRef: React.RefObject<HTMLDivElement | nul
       const mixer = new THREE.AnimationMixer(mesh);
       const action = mixer.clipAction(animation);
       action.play();
-      mixer.timeScale = 0; // 手动根据时间控制帧
+      mixer.timeScale = 0;
       mixerRef.current = mixer;
     },
     [clearCurrentMesh]
   );
 
-  // 刷新关节点位置
   const renderLandmarksPositions = useCallback((landmarks: Record<string, [number, number, number]>) => {
     const pointsGroup = pointsGroupRef.current;
     if (!pointsGroup) return;
@@ -143,7 +140,6 @@ export function useThreeScene(containerRef: React.RefObject<HTMLDivElement | nul
     });
   }, []);
 
-  // 关键核心：设置 MMD 模型与关节点在指定时间 (time) 处的姿态
   const setMmdTime = useCallback(
     (time: number, landmarks?: Record<string, [number, number, number]>) => {
       if (mixerRef.current) {
@@ -175,56 +171,13 @@ export function useThreeScene(containerRef: React.RefObject<HTMLDivElement | nul
     [renderLandmarksPositions]
   );
 
-  const loadAndPlayGLB = useCallback(
-    (glbUrl: string): Promise<void> => {
-      return new Promise((resolve, reject) => {
-        const scene = sceneRef.current;
-        if (!scene) return resolve();
-
-        const gltfLoader = new GLTFLoader();
-        gltfLoader.load(
-          glbUrl,
-          (gltf) => {
-            clearCurrentMesh();
-            if (pointsGroupRef.current) pointsGroupRef.current.clear();
-
-            const model = gltf.scene;
-            scene.add(model);
-            currentMeshRef.current = model;
-
-            const helper = new THREE.SkeletonHelper(model);
-            if ('linewidth' in helper.material) {
-              (helper.material as any).linewidth = 2;
-            }
-            scene.add(helper);
-            skeletonHelperRef.current = helper;
-
-            if (gltf.animations.length > 0) {
-              const mixer = new THREE.AnimationMixer(model);
-              mixer.timeScale = 1.0;
-              const action = mixer.clipAction(gltf.animations[0]);
-              action.play();
-              mixerRef.current = mixer;
-            }
-
-            resolve();
-          },
-          undefined,
-          reject
-        );
-      });
-    },
-    [clearCurrentMesh]
-  );
-
   return {
     setMmdCamera,
-    setHumanoidCamera,
     clearCurrentMesh,
+    clearPoints,
     setupMmdAnimation,
     setMmdTime,
     updateLandmarks,
     renderLandmarksPositions,
-    loadAndPlayGLB,
   };
 }
