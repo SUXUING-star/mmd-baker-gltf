@@ -1,6 +1,6 @@
 // src/solvers/limbSolver.ts
 import * as THREE from 'three';
-import { makeOrthoBasis, getV, inv, mul } from './mathUtils';
+import { getV, inv, makeOrthoBasis, mul } from './mathUtils';
 
 function solveAnatomicalLimb(
   P1: THREE.Vector3,
@@ -73,40 +73,40 @@ function solveAnatomicalLimb(
 /**
  * 严格几何对称手掌朝向求解器
  */
-function solveHandWorldQ(
-  pWrist: THREE.Vector3,
-  pIndex1: THREE.Vector3,
-  pPinky1: THREE.Vector3,
-  pMiddle1: THREE.Vector3,
-  isLeft: boolean,
-  fallbackArmQ: THREE.Quaternion
-): THREE.Quaternion {
-  const dir = new THREE.Vector3().subVectors(pMiddle1, pWrist);
-  if (dir.lengthSq() < 1e-4) {
-    return fallbackArmQ.clone();
-  }
-  const boneDir = dir.normalize();
+ // 替换 limbSolver.ts 里的 solveHandWorldQ 函数
+ function solveHandWorldQ(
+   pWrist: THREE.Vector3,
+   pIndex1: THREE.Vector3,
+   pPinky1: THREE.Vector3,
+   pMiddle1: THREE.Vector3,
+   isLeft: boolean,
+   fallbackArmQ: THREE.Quaternion
+ ): THREE.Quaternion {
+   const dir = new THREE.Vector3().subVectors(pMiddle1, pWrist);
+   if (dir.lengthSq() < 1e-4) {
+     return fallbackArmQ.clone();
+   }
+   const boneDir = dir.normalize();
 
-  // 左手骨骼沿 +X；右手骨骼沿 -X，因此右手局部 +X 对应 -boneDir
-  const axisX = isLeft ? boneDir.clone() : boneDir.clone().negate();
+   const axisX = isLeft ? boneDir.clone() : boneDir.clone().negate();
 
-  // 由小指指向食指的侧向向量 (两手均指向 +Z 前方)
-  const sideVec = new THREE.Vector3().subVectors(pIndex1, pPinky1).normalize();
+   const sideVecDiff = new THREE.Vector3().subVectors(pIndex1, pPinky1);
+   if (sideVecDiff.lengthSq() < 1e-4) {
+     return fallbackArmQ.clone();
+   }
+   const sideVec = sideVecDiff.normalize();
 
-  // 严格对称外积：
-  // 左手：sideVec(+Z) x boneDir(+X) = +Y (手背朝上)
-  // 右手：boneDir(-X) x sideVec(+Z) = +Y (手背朝上)
-  const axisY = isLeft
-    ? new THREE.Vector3().crossVectors(sideVec, boneDir).normalize()
-    : new THREE.Vector3().crossVectors(boneDir, sideVec).normalize();
+   const axisY = isLeft
+     ? new THREE.Vector3().crossVectors(sideVec, boneDir).normalize()
+     : new THREE.Vector3().crossVectors(boneDir, sideVec).normalize();
 
-  if (axisY.lengthSq() < 1e-4 || isNaN(axisY.x)) {
-    return fallbackArmQ.clone();
-  }
+   if (axisY.lengthSq() < 1e-4 || isNaN(axisY.x)) {
+     return fallbackArmQ.clone();
+   }
 
-  const axisZ = new THREE.Vector3().crossVectors(axisX, axisY).normalize();
-  return makeOrthoBasis(axisX, axisY, axisZ);
-}
+   const axisZ = new THREE.Vector3().crossVectors(axisX, axisY).normalize();
+   return makeOrthoBasis(axisX, axisY, axisZ);
+ }
 
 export function solveLimbs(
   lm: Record<string, [number, number, number]>,

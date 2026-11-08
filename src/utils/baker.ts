@@ -1,8 +1,8 @@
 
 import * as THREE from 'three';
-import { MMDLoader } from 'three/examples/jsm/loaders/MMDLoader.js';
 import { MMDAnimationHelper } from 'three/examples/jsm/animation/MMDAnimationHelper.js';
-import { MMD_POINT_NAMES, LandmarkData, LandmarkFrame } from '../types/types';
+import { MMDLoader } from 'three/examples/jsm/loaders/MMDLoader.js';
+import { LandmarkData, LandmarkFrame, MMD_POINT_NAMES } from '../types/types';
 
 export interface BakerRenderCallback {
   (mesh: THREE.SkinnedMesh, landmarks: Record<string, [number, number, number]>, progress: number): void;
