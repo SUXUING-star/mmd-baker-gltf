@@ -15,7 +15,6 @@ export interface BakerResult {
   animation: THREE.AnimationClip;
 }
 
-/** 1x1 透明 PNG Base64，用于缺失贴图的静默兜底，杜绝 ERR_FILE_NOT_FOUND 报错 */
 const BLANK_TEXTURE_DATA_URL =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
 
@@ -48,16 +47,13 @@ export async function bakePure3DLandmarks(
   const createdBlobUrls: string[] = [];
   const fileMap = new Map<string, string>();
 
-  // 为文件夹中所有伴随文件建立内存索引
   if (extraFiles && extraFiles.length > 0) {
     for (const file of extraFiles) {
       const blobUrl = URL.createObjectURL(file);
       createdBlobUrls.push(blobUrl);
 
-      // 文件名匹配 (例如 tex_bdy.png)
       fileMap.set(file.name.toLowerCase(), blobUrl);
 
-      // 相对路径匹配 (例如 texture2d/tex_bdy.png)
       if (file.webkitRelativePath) {
         const normalizedRel = file.webkitRelativePath.toLowerCase().replace(/\\/g, '/');
         fileMap.set(normalizedRel, blobUrl);
@@ -69,7 +65,6 @@ export async function bakePure3DLandmarks(
     }
   }
 
-  // 拦截贴图资源加载，杜绝任何 404
   manager.setURLModifier((url: string) => {
     if (url.includes('#model.pmx') || url.includes('#motion.vmd')) {
       return url;
@@ -80,16 +75,13 @@ export async function bakePure3DLandmarks(
     const filename = pathname.split('/').pop()?.toLowerCase() || '';
     const lowerPath = pathname.toLowerCase();
 
-    // 1. 相对路径命中
     if (fileMap.has(lowerPath)) {
       return fileMap.get(lowerPath)!;
     }
-    // 2. 纯文件名命中
     if (fileMap.has(filename)) {
       return fileMap.get(filename)!;
     }
 
-    // 3. 未找到贴图时的兜底：直接返回 1x1 内存图，绝不让浏览器发不存在的 blob 从而报 ERR_FILE_NOT_FOUND
     if (/\.(png|jpe?g|bmp|tga|spa|sph|webp|dds)$/i.test(cleanUrl) || cleanUrl.includes('Texture2D') || cleanUrl.includes('tex')) {
       return BLANK_TEXTURE_DATA_URL;
     }
@@ -128,7 +120,8 @@ export async function bakePure3DLandmarks(
     const helper = new MMDAnimationHelper({ afterglow: 0, resetPhysicsOnLoop: false });
     helper.add(mesh, { animation: animation, physics: false, warmup: 0 });
 
-    const standardBoneMap = resolveModelBones(mesh.skeleton.bones);
+    // 关键修正：将整棵 Object3D 节点树 `mesh` 传入，深度搜刮多层/两层嵌套下的所有骨骼
+    const standardBoneMap = resolveModelBones(mesh);
 
     const fps = 30;
     const dt = 1.0 / fps;

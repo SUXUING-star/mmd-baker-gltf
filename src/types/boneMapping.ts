@@ -30,7 +30,7 @@ export const StandardBone = {
   RightFoot: 'RightFoot',
   RightToes: 'RightToes',
 
-  // 左手 5 指 (0=根部掌骨/大拇指根, 1=近节, 2=中节, 3=远节)
+  // 左手 5 指 (0=根部掌骨, 1=近节, 2=中节, 3=远节)
   LeftThumb0: 'LeftThumb0', LeftThumb1: 'LeftThumb1', LeftThumb2: 'LeftThumb2',
   LeftIndex1: 'LeftIndex1', LeftIndex2: 'LeftIndex2', LeftIndex3: 'LeftIndex3',
   LeftMiddle1: 'LeftMiddle1', LeftMiddle2: 'LeftMiddle2', LeftMiddle3: 'LeftMiddle3',
@@ -120,48 +120,103 @@ export const BONE_CANDIDATE_MAP: Record<StandardBoneKey, string[]> = {
   [StandardBone.RightLittle3]: ['右小指３', 'Little3R', 'Pinky3R', 'Little_3_R', 'Pinky_3_R', 'rightLittle3'],
 };
 
-/** 字符归一化 (转小写，去除所有下划线、空格、点) */
-function normalizeBoneName(name: string): string {
-  return name.toLowerCase().replace(/[_\s\.]/g, '');
+/** 归一化清洗（去除所有特殊符号与分隔符，统一转小写） */
+function normalizeString(str: string): string {
+  return str.toLowerCase().replace(/[_\s\.\:\/\-]/g, '');
 }
 
-/** 智能解析骨骼树，将模型实际存在的骨骼映射至标准键 */
-export function resolveModelBones(bones: THREE.Bone[]): Map<StandardBoneKey, THREE.Bone> {
+/** 剥离 UmaViewer 等工具导出的各种模型编号、人物前缀与层级路径 */
+function getCleanBoneNameVariants(rawName: string): string[] {
+  const variants = new Set<string>();
+  variants.add(rawName);
+
+  // 1. 若包含 '/'、':'、'|' 等路径分隔符，截取最后一段真实骨骼名
+  const lastSegment = rawName.split(/[/|:]/).pop();
+  if (lastSegment) {
+    variants.add(lastSegment);
+  }
+
+  // 2. 去除形如 "chr1048_23_", "cha1048_23_", "1048_23_", "bdy1048_" 等前缀
+  const strippedPrefix = rawName.replace(/^([a-zA-Z0-9]+_)+/g, '');
+  if (strippedPrefix && strippedPrefix !== rawName) {
+    variants.add(strippedPrefix);
+  }
+
+  // 3. 提取末尾词段（例如从 "chr1048_23_UpperArm_L" 提取 "UpperArm_L" 或 "Arm_L"）
+  const underscoreParts = rawName.split('_');
+  if (underscoreParts.length > 2) {
+    variants.add(underscoreParts.slice(-2).join('_'));
+    variants.add(underscoreParts[underscoreParts.length - 1]);
+  }
+
+  return Array.from(variants);
+}
+
+/** 智能解析骨骼树，支持单层 Array 与多层嵌套 Object3D 树深度搜刮 */
+export function resolveModelBones(bonesOrObject: THREE.Bone[] | THREE.Object3D): Map<StandardBoneKey, THREE.Bone> {
   const result = new Map<StandardBoneKey, THREE.Bone>();
+  const rawBones: THREE.Bone[] = [];
 
-  // 1. 过滤垃圾骨骼并建立查找表
-  const validBones: THREE.Bone[] = [];
-  const nameToBone = new Map<string, THREE.Bone>();
-  const normalizedMap = new Map<string, THREE.Bone>();
+  if (Array.isArray(bonesOrObject)) {
+    rawBones.push(...bonesOrObject);
+  } else if (bonesOrObject && typeof bonesOrObject === 'object') {
+    // 全树递归搜刮：遍历所有子节点以及 SkinnedMesh 的 Skeleton
+    bonesOrObject.traverse((node) => {
+      if ((node as THREE.Bone).isBone || node instanceof THREE.Bone) {
+        rawBones.push(node as THREE.Bone);
+      }
+      if ((node as THREE.SkinnedMesh).isSkinnedMesh) {
+        const skinned = node as THREE.SkinnedMesh;
+        if (skinned.skeleton && Array.isArray(skinned.skeleton.bones)) {
+          rawBones.push(...skinned.skeleton.bones);
+        }
+      }
+    });
+  }
 
-  bones.forEach((b) => {
+  // 去重
+  const uniqueBones = Array.from(new Set(rawBones));
+
+  // 建立多重别名索引表
+  const boneMapExact = new Map<string, THREE.Bone>();
+  const boneMapNorm = new Map<string, THREE.Bone>();
+
+  uniqueBones.forEach((b) => {
     const rawName = b.name.trim();
     const lower = rawName.toLowerCase();
     const isGarbage = GARBAGE_BONE_KEYWORDS.some((kw) => lower.includes(kw));
     if (isGarbage) return;
 
-    validBones.push(b);
-    nameToBone.set(rawName, b);
-    normalizedMap.set(normalizeBoneName(rawName), b);
+    // 变体收集
+    const variants = getCleanBoneNameVariants(rawName);
+    variants.forEach((v) => {
+      if (!boneMapExact.has(v)) {
+        boneMapExact.set(v, b);
+      }
+      const norm = normalizeString(v);
+      if (!boneMapNorm.has(norm)) {
+        boneMapNorm.set(norm, b);
+      }
+    });
   });
 
-  // 2. 针对每一个标准骨骼，按候选优先级进行两级搜索
+  // 按标准 Key 逐一搜寻
   (Object.keys(BONE_CANDIDATE_MAP) as StandardBoneKey[]).forEach((stdKey) => {
     const candidates = BONE_CANDIDATE_MAP[stdKey];
 
-    // 第一级：精确命中
+    // 级联 1: 精确/变体名命中
     for (const cand of candidates) {
-      if (nameToBone.has(cand)) {
-        result.set(stdKey, nameToBone.get(cand)!);
+      if (boneMapExact.has(cand)) {
+        result.set(stdKey, boneMapExact.get(cand)!);
         return;
       }
     }
 
-    // 第二级：归一化模糊命中（忽略大小写、下划线）
+    // 级联 2: 归一化命中（忽略下划线、大小写、路径）
     for (const cand of candidates) {
-      const norm = normalizeBoneName(cand);
-      if (normalizedMap.has(norm)) {
-        result.set(stdKey, normalizedMap.get(norm)!);
+      const normCand = normalizeString(cand);
+      if (boneMapNorm.has(normCand)) {
+        result.set(stdKey, boneMapNorm.get(normCand)!);
         return;
       }
     }
