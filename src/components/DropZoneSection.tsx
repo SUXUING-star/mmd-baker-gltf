@@ -48,7 +48,9 @@ export const DropZoneSection: React.FC<DropZoneSectionProps> = ({ t, pipeline })
 
     if (items && items.length > 0) {
       for (let i = 0; i < items.length; i++) {
-        const entry = items[i].webkitGetAsEntry ? items[i].webkitGetAsEntry() : null;
+        const item = items[i];
+        // 关键修复：使用 typeof 避开 TS2774 检查
+        const entry = typeof item.webkitGetAsEntry === 'function' ? item.webkitGetAsEntry() : null;
         if (entry) {
           await scanAllEntries(entry, allFiles);
         }
@@ -62,7 +64,6 @@ export const DropZoneSection: React.FC<DropZoneSectionProps> = ({ t, pipeline })
     const foundPmx = allFiles.find((f) => f.name.toLowerCase().endsWith('.pmx'));
 
     if (foundPmx) {
-      // 传递主 PMX 文件，以及文件夹中所有图片贴图等附件
       selectPmx(foundPmx, allFiles);
     } else {
       alert(t.pmxAlert);
