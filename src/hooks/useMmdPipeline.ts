@@ -29,18 +29,18 @@ export interface MmdPipeline {
   progress: number;
   processing: boolean;
   exportingType: string | null;
-  // 文件状态管理
+  // 文件状态
   customPmxFile: File | null;
   vmdFile: File | null;
   activePmxTarget: File | string;
   activeVmdTarget: File | string;
-  selectPmx: (file: File | null) => void;
+  selectPmx: (file: File | null, extraFiles?: File[]) => void;
   selectVmd: (file: File) => void;
   resetPmx: () => void;
-  // 时间轴控制器
+  // 控制核心
   timeline: TimelineController;
-  // 核心操作
-  loadMotion: (pmxTarget: File | string, vmdTarget: File | string) => Promise<void>;
+  startBake: () => Promise<void>;
+  loadDefaultDemo: () => Promise<void>;
   downloadVrma: (metaOptions?: VrmaMetaOptions) => Promise<void>;
   downloadGlb: () => Promise<void>;
   downloadBoth: (metaOptions?: VrmaMetaOptions) => Promise<void>;
@@ -80,10 +80,8 @@ export function useMmdPipeline(
   const [exportingType, setExportingType] = useState<string | null>(null);
 
   const [customPmxFile, setCustomPmxFile] = useState<File | null>(null);
+  const [customExtraFiles, setCustomExtraFiles] = useState<File[]>([]);
   const [vmdFile, setVmdFile] = useState<File | null>(null);
-
-  const activePmxTarget = customPmxFile || defaultPmxPath;
-  const activeVmdTarget = vmdFile || defaultVmdPath;
 
   const rawLandmarkDataRef = useRef<LandmarkData | null>(null);
 
@@ -95,6 +93,9 @@ export function useMmdPipeline(
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
 
   const timerRef = useRef<number | null>(null);
+
+  const activePmxTarget = useMemo(() => customPmxFile || defaultPmxPath, [customPmxFile, defaultPmxPath]);
+  const activeVmdTarget = useMemo(() => vmdFile || defaultVmdPath, [vmdFile, defaultVmdPath]);
 
   const stopPlayback = useCallback(() => {
     if (timerRef.current !== null) {
@@ -154,7 +155,6 @@ export function useMmdPipeline(
     seekToFrame(bestFrameIndex);
   }, [startFrame, seekToFrame]);
 
-  // 时间轴动作的统一内聚接口
   const timeline: TimelineController = useMemo(
     () => ({
       maxFrames,
@@ -183,13 +183,14 @@ export function useMmdPipeline(
     [maxFrames, fps, currentFrame, startFrame, endFrame, isPlaying, togglePlay, stopPlayback, seekToFrame, autoSnapLoopEnd]
   );
 
-  // 动作与模型烘焙
-  const loadMotion = useCallback(
-    async (pmxTarget: File | string, vmdTarget: File | string) => {
+  // 执行核心烘焙
+  const runBake = useCallback(
+    async (pmxTarget: File | string, vmdTarget: File | string, extraFiles: File[]) => {
       try {
         stopPlayback();
         setProcessing(true);
         setStatusType('analyzing');
+        setProgress(0);
 
         threeBridge.setMmdCamera();
         threeBridge.clearCurrentMesh();
@@ -200,7 +201,8 @@ export function useMmdPipeline(
           (m, landmarks, prog) => {
             setProgress(prog);
             threeBridge.updateLandmarks(m, landmarks);
-          }
+          },
+          extraFiles
         );
 
         rawLandmarkDataRef.current = landmarkData;
@@ -244,28 +246,38 @@ export function useMmdPipeline(
     [threeBridge, stopPlayback]
   );
 
+  // 用户点击【开始烘焙解算】按钮调用此方法
+  const startBake = useCallback(async () => {
+    await runBake(activePmxTarget, activeVmdTarget, customExtraFiles);
+  }, [runBake, activePmxTarget, activeVmdTarget, customExtraFiles]);
+
+  // 载入默认示例
+  const loadDefaultDemo = useCallback(async () => {
+    setCustomPmxFile(null);
+    setCustomExtraFiles([]);
+    setVmdFile(null);
+    await runBake(defaultPmxPath, defaultVmdPath, []);
+  }, [runBake, defaultPmxPath, defaultVmdPath]);
+
   const selectPmx = useCallback(
-    (file: File | null) => {
+    (file: File | null, extraFiles: File[] = []) => {
       setCustomPmxFile(file);
-      if (file || vmdFile) {
-        loadMotion(file || defaultPmxPath, activeVmdTarget);
-      }
+      setCustomExtraFiles(extraFiles);
+      setStatusType('ready');
     },
-    [defaultPmxPath, activeVmdTarget, vmdFile, loadMotion]
+    []
   );
 
-  const selectVmd = useCallback(
-    (file: File) => {
-      setVmdFile(file);
-      loadMotion(activePmxTarget, file);
-    },
-    [activePmxTarget, loadMotion]
-  );
+  const selectVmd = useCallback((file: File) => {
+    setVmdFile(file);
+    setStatusType('ready');
+  }, []);
 
   const resetPmx = useCallback(() => {
     setCustomPmxFile(null);
-    loadMotion(defaultPmxPath, activeVmdTarget);
-  }, [defaultPmxPath, activeVmdTarget, loadMotion]);
+    setCustomExtraFiles([]);
+    setStatusType('ready');
+  }, []);
 
   const getBaseFilename = useCallback(() => {
     const target = activeVmdTarget;
@@ -274,7 +286,6 @@ export function useMmdPipeline(
       : target.name.replace(/\.[^/.]+$/, '');
   }, [activeVmdTarget]);
 
-  // 切片并下载 VRMA
   const downloadVrma = useCallback(
     async (metaOptions?: VrmaMetaOptions) => {
       if (!rawLandmarkDataRef.current) return;
@@ -297,7 +308,6 @@ export function useMmdPipeline(
     [startFrame, endFrame, getBaseFilename]
   );
 
-  // 切片并下载 GLB
   const downloadGlb = useCallback(async () => {
     if (!rawLandmarkDataRef.current) return;
     try {
@@ -312,7 +322,6 @@ export function useMmdPipeline(
     }
   }, [startFrame, endFrame, getBaseFilename]);
 
-  // 一键下载两者
   const downloadBoth = useCallback(
     async (metaOptions?: VrmaMetaOptions) => {
       await downloadVrma(metaOptions);
@@ -351,7 +360,8 @@ export function useMmdPipeline(
     selectVmd,
     resetPmx,
     timeline,
-    loadMotion,
+    startBake,
+    loadDefaultDemo,
     downloadVrma,
     downloadGlb,
     downloadBoth,

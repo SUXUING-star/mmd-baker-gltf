@@ -24,7 +24,6 @@ export default function App() {
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const threeBridge = useThreeScene(canvasContainerRef);
 
-  // 领域对象实例
   const pipeline = useMmdPipeline(threeBridge, DEFAULT_PMX_PATH, DEFAULT_VMD_PATH, lang);
   const meta = useVrmaMetadata();
 
@@ -37,7 +36,7 @@ export default function App() {
     <div style={{ minHeight: '100vh', width: '100%', background: '#ffffff', padding: '24px 0', boxSizing: 'border-box', overflowY: 'auto' }}>
       <div style={{ maxWidth: 960, margin: '0 auto', padding: '0 20px' }}>
 
-        {/* 页眉语言切换 */}
+        {/* 顶部语言切换 */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <h2 style={{ margin: 0, color: '#111', fontSize: 20, fontWeight: 700 }}>{t.title}</h2>
           <div style={{ display: 'flex', gap: 4, background: '#f0f0f0', padding: 3, borderRadius: 6 }}>
@@ -62,25 +61,20 @@ export default function App() {
           </div>
         </div>
 
-        {/* 1. 3D 视口 */}
+        {/* 1. 3D 预览视口 */}
         <ThreeCanvas containerRef={canvasContainerRef} />
 
-        {/* 2. 时间轴剪辑 */}
+        {/* 2. 时间轴剪辑控制器 */}
         <ClipSection t={t} timeline={pipeline.timeline} disabled={pipeline.processing} />
 
-        {/* 3. 文件投递区 */}
+        {/* 3. 模型与动作文件投递区 */}
         <DropZoneSection t={t} pipeline={pipeline} />
 
-        {/* 4. VRMA Metadata 模块 */}
+        {/* 4. VRMA Metadata 表单 */}
         <MetadataSection t={t} meta={meta} disabled={pipeline.processing} />
 
-        {/* 5. 导出下载区 */}
-        <DownloadSection
-          t={t}
-          pipeline={pipeline}
-          meta={meta}
-          onTestDefault={() => pipeline.loadMotion(DEFAULT_PMX_PATH, DEFAULT_VMD_PATH)}
-        />
+        {/* 5. 核心烘焙控制与下载面板 */}
+        <DownloadSection t={t} pipeline={pipeline} meta={meta} />
 
       </div>
     </div>

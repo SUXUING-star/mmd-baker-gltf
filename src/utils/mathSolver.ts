@@ -1,11 +1,12 @@
-
+// src/utils/mathSolver.ts
 import * as THREE from 'three';
-import { HUMANOID_BONES, HumanoidBoneName, LandmarkData } from '../types/types';
-import { ensureQuatContinuity } from '../solvers/mathUtils';
-import { solveHips } from '../solvers/hipsSolver';
-import { solveSpine } from '../solvers/spineSolver';
-import { solveLimbs } from '../solvers/limbSolver';
 import { solveFingers } from '../solvers/fingerSolver';
+import { solveHips } from '../solvers/hipsSolver';
+import { solveLimbs } from '../solvers/limbSolver';
+import { ensureQuatContinuity, getV, hasBone } from '../solvers/mathUtils';
+import { solveSpine } from '../solvers/spineSolver';
+import { StandardBone } from '../types/boneMapping';
+import { HUMANOID_BONES, HumanoidBoneName, LandmarkData } from '../types/types';
 
 export function solveAllHumanoidQuaternions(data: LandmarkData) {
   const { frames } = data;
@@ -14,9 +15,15 @@ export function solveAllHumanoidQuaternions(data: LandmarkData) {
   }
 
   const f0 = frames[0].landmarks;
-  const pPelvis0Y = f0['下半身'] ? f0['下半身'][1] : (f0['センター'] ? f0['センター'][1] : 9.5);
-  const pLAnkle0Y = f0['左足首'] ? f0['左足首'][1] : 1.0;
-  const pRAnkle0Y = f0['右足首'] ? f0['右足首'][1] : 1.0;
+
+  // 使用标准语义检索起始脚踝与骨盆高度
+  const pPelvis0 = hasBone(f0, StandardBone.Hips)
+    ? getV(f0, StandardBone.Hips)
+    : getV(f0, StandardBone.Root, new THREE.Vector3(0, 9.5, 0));
+  const pPelvis0Y = pPelvis0.y;
+
+  const pLAnkle0Y = getV(f0, StandardBone.LeftFoot, new THREE.Vector3(0, 1.0, 0)).y;
+  const pRAnkle0Y = getV(f0, StandardBone.RightFoot, new THREE.Vector3(0, 1.0, 0)).y;
   const ankleBaseY = (pLAnkle0Y + pRAnkle0Y) / 2;
 
   const mmdLegSpan = Math.max(0.5, pPelvis0Y - ankleBaseY);
@@ -47,7 +54,6 @@ export function solveAllHumanoidQuaternions(data: LandmarkData) {
     const leftFingers = solveFingers(lm, true);
     const rightFingers = solveFingers(lm, false);
 
-    // 关键修正：类型断言解决 TS 2739 展开属性缺失报错
     const localMap = {
       hips: hips.hipsWorldQ,
       ...spine.localRotations,

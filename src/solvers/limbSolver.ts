@@ -1,5 +1,6 @@
 // src/solvers/limbSolver.ts
 import * as THREE from 'three';
+import { StandardBone } from '../types/boneMapping';
 import { getV, inv, makeOrthoBasis, mul } from './mathUtils';
 
 function solveAnatomicalLimb(
@@ -70,43 +71,39 @@ function solveAnatomicalLimb(
   }
 }
 
-/**
- * 严格几何对称手掌朝向求解器
- */
- // 替换 limbSolver.ts 里的 solveHandWorldQ 函数
- function solveHandWorldQ(
-   pWrist: THREE.Vector3,
-   pIndex1: THREE.Vector3,
-   pPinky1: THREE.Vector3,
-   pMiddle1: THREE.Vector3,
-   isLeft: boolean,
-   fallbackArmQ: THREE.Quaternion
- ): THREE.Quaternion {
-   const dir = new THREE.Vector3().subVectors(pMiddle1, pWrist);
-   if (dir.lengthSq() < 1e-4) {
-     return fallbackArmQ.clone();
-   }
-   const boneDir = dir.normalize();
+function solveHandWorldQ(
+  pWrist: THREE.Vector3,
+  pIndex1: THREE.Vector3,
+  pPinky1: THREE.Vector3,
+  pMiddle1: THREE.Vector3,
+  isLeft: boolean,
+  fallbackArmQ: THREE.Quaternion
+): THREE.Quaternion {
+  const dir = new THREE.Vector3().subVectors(pMiddle1, pWrist);
+  if (dir.lengthSq() < 1e-4) {
+    return fallbackArmQ.clone();
+  }
+  const boneDir = dir.normalize();
 
-   const axisX = isLeft ? boneDir.clone() : boneDir.clone().negate();
+  const axisX = isLeft ? boneDir.clone() : boneDir.clone().negate();
 
-   const sideVecDiff = new THREE.Vector3().subVectors(pIndex1, pPinky1);
-   if (sideVecDiff.lengthSq() < 1e-4) {
-     return fallbackArmQ.clone();
-   }
-   const sideVec = sideVecDiff.normalize();
+  const sideVecDiff = new THREE.Vector3().subVectors(pIndex1, pPinky1);
+  if (sideVecDiff.lengthSq() < 1e-4) {
+    return fallbackArmQ.clone();
+  }
+  const sideVec = sideVecDiff.normalize();
 
-   const axisY = isLeft
-     ? new THREE.Vector3().crossVectors(sideVec, boneDir).normalize()
-     : new THREE.Vector3().crossVectors(boneDir, sideVec).normalize();
+  const axisY = isLeft
+    ? new THREE.Vector3().crossVectors(sideVec, boneDir).normalize()
+    : new THREE.Vector3().crossVectors(boneDir, sideVec).normalize();
 
-   if (axisY.lengthSq() < 1e-4 || isNaN(axisY.x)) {
-     return fallbackArmQ.clone();
-   }
+  if (axisY.lengthSq() < 1e-4 || isNaN(axisY.x)) {
+    return fallbackArmQ.clone();
+  }
 
-   const axisZ = new THREE.Vector3().crossVectors(axisX, axisY).normalize();
-   return makeOrthoBasis(axisX, axisY, axisZ);
- }
+  const axisZ = new THREE.Vector3().crossVectors(axisX, axisY).normalize();
+  return makeOrthoBasis(axisX, axisY, axisZ);
+}
 
 export function solveLimbs(
   lm: Record<string, [number, number, number]>,
@@ -115,39 +112,39 @@ export function solveLimbs(
   hipSideOrtho: THREE.Vector3,
   chestUp: THREE.Vector3
 ) {
-  const pUpperChest = getV(lm, '上半身2', getV(lm, '上半身'));
+  const pUpperChest = getV(lm, StandardBone.Chest, getV(lm, StandardBone.Spine));
 
-  const pLShoulder = getV(lm, '左肩', pUpperChest);
-  const pLArm = getV(lm, '左腕', pLShoulder);
-  const pLElbow = getV(lm, '左ひじ');
-  const pLWrist = getV(lm, '左手首');
+  const pLShoulder = getV(lm, StandardBone.LeftShoulder, pUpperChest);
+  const pLArm = getV(lm, StandardBone.LeftUpperArm, pLShoulder);
+  const pLElbow = getV(lm, StandardBone.LeftLowerArm);
+  const pLWrist = getV(lm, StandardBone.LeftHand);
 
-  const pRShoulder = getV(lm, '右肩', pUpperChest);
-  const pRArm = getV(lm, '右腕', pRShoulder);
-  const pRElbow = getV(lm, '右ひじ');
-  const pRWrist = getV(lm, '右手首');
+  const pRShoulder = getV(lm, StandardBone.RightShoulder, pUpperChest);
+  const pRArm = getV(lm, StandardBone.RightUpperArm, pRShoulder);
+  const pRElbow = getV(lm, StandardBone.RightLowerArm);
+  const pRWrist = getV(lm, StandardBone.RightHand);
 
-  const pLHip = getV(lm, '左足');
-  const pLKnee = getV(lm, '左ひざ');
-  const pLAnkle = getV(lm, '左足首');
+  const pLHip = getV(lm, StandardBone.LeftUpperLeg);
+  const pLKnee = getV(lm, StandardBone.LeftLowerLeg);
+  const pLAnkle = getV(lm, StandardBone.LeftFoot);
 
-  const pRHip = getV(lm, '右足');
-  const pRKnee = getV(lm, '右ひざ');
-  const pRAnkle = getV(lm, '右足首');
+  const pRHip = getV(lm, StandardBone.RightUpperLeg);
+  const pRKnee = getV(lm, StandardBone.RightLowerLeg);
+  const pRAnkle = getV(lm, StandardBone.RightFoot);
 
   const leftArm = solveAnatomicalLimb(pLArm, pLElbow, pLWrist, 'leftArm', hipSideOrtho, chestUp);
   const rightArm = solveAnatomicalLimb(pRArm, pRElbow, pRWrist, 'rightArm', hipSideOrtho, chestUp);
   const leftLeg = solveAnatomicalLimb(pLHip, pLKnee, pLAnkle, 'leg', hipSideOrtho, chestUp);
   const rightLeg = solveAnatomicalLimb(pRHip, pRKnee, pRAnkle, 'leg', hipSideOrtho, chestUp);
 
-  const pLIndex1 = getV(lm, '左人指１', pLWrist);
-  const pLPinky1 = getV(lm, '左小指１', pLWrist);
-  const pLMiddle1 = getV(lm, '左中指１', pLWrist);
+  const pLIndex1 = getV(lm, StandardBone.LeftIndex1, pLWrist);
+  const pLPinky1 = getV(lm, StandardBone.LeftLittle1, pLWrist);
+  const pLMiddle1 = getV(lm, StandardBone.LeftMiddle1, pLWrist);
   const leftHandWorldQ = solveHandWorldQ(pLWrist, pLIndex1, pLPinky1, pLMiddle1, true, leftArm.lowerWorldQ);
 
-  const pRIndex1 = getV(lm, '右人指１', pRWrist);
-  const pRPinky1 = getV(lm, '右小指１', pRWrist);
-  const pRMiddle1 = getV(lm, '右中指１', pRWrist);
+  const pRIndex1 = getV(lm, StandardBone.RightIndex1, pRWrist);
+  const pRPinky1 = getV(lm, StandardBone.RightLittle1, pRWrist);
+  const pRMiddle1 = getV(lm, StandardBone.RightMiddle1, pRWrist);
   const rightHandWorldQ = solveHandWorldQ(pRWrist, pRIndex1, pRPinky1, pRMiddle1, false, rightArm.lowerWorldQ);
 
   const sInv = inv(spineWorldQ);

@@ -7,42 +7,56 @@ interface DownloadSectionProps {
   t: any;
   pipeline: MmdPipeline;
   meta: VrmaMetadataState;
-  onTestDefault: () => void;
 }
 
-export const DownloadSection: React.FC<DownloadSectionProps> = ({
-  t,
-  pipeline,
-  meta,
-  onTestDefault,
-}) => {
-  const { status, statusType, progress, processing, exportingType, timeline, downloadVrma, downloadGlb, downloadBoth } = pipeline;
+export const DownloadSection: React.FC<DownloadSectionProps> = ({ t, pipeline, meta }) => {
+  const {
+    status,
+    statusType,
+    progress,
+    processing,
+    exportingType,
+    timeline,
+    startBake,
+    loadDefaultDemo,
+    downloadVrma,
+    downloadGlb,
+    downloadBoth,
+  } = pipeline;
   const { maxFrames, startFrame, endFrame, fps } = timeline;
 
-  const isLoaded = maxFrames > 0;
-  const frameCount = isLoaded ? endFrame - startFrame + 1 : 0;
-  const durationSec = isLoaded ? (frameCount / fps).toFixed(2) : '0';
+  const isBaked = maxFrames > 0;
+  const frameCount = isBaked ? endFrame - startFrame + 1 : 0;
+  const durationSec = isBaked ? (frameCount / fps).toFixed(2) : '0';
 
   return (
-    <div style={{ border: '1px solid #e0e0e0', borderRadius: 8, padding: 16, background: '#fafafa' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <div style={{ fontSize: 13, color: '#444' }}>
+    <div style={{ border: '1px solid #d9d9d9', borderRadius: 8, padding: 16, background: '#fafafa' }}>
+      {/* 1. 状态与提示 */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+        <div style={{ fontSize: 13, color: '#333' }}>
           <strong>{t.statusLabel}</strong>
-          <span style={{ color: statusType === 'error' ? '#ff4d4f' : '#1677ff' }}>
+          <span
+            style={{
+              marginLeft: 6,
+              fontWeight: 600,
+              color: statusType === 'error' ? '#ff4d4f' : processing ? '#fa8c16' : '#1677ff',
+            }}
+          >
             {processing && progress > 0 ? t.bakingProgress(progress) : status}
           </span>
         </div>
 
-        {!isLoaded && !processing && (
+        {!processing && (
           <button
-            onClick={onTestDefault}
+            onClick={loadDefaultDemo}
             style={{
               padding: '4px 10px',
               fontSize: 12,
-              background: '#f0f0f0',
+              background: '#ffffff',
               border: '1px solid #d9d9d9',
               borderRadius: 4,
               cursor: 'pointer',
+              color: '#555',
             }}
           >
             {t.testDefaultBtn}
@@ -50,9 +64,38 @@ export const DownloadSection: React.FC<DownloadSectionProps> = ({
         )}
       </div>
 
-      {isLoaded && (
-        <div style={{ borderTop: '1px solid #ebebeb', paddingTop: 14 }}>
-          <div style={{ fontSize: 12, color: '#666', marginBottom: 10 }}>
+      {/* 2. 核心主按钮：开始烘焙 / 重新烘焙 */}
+      <div style={{ marginBottom: isBaked ? 16 : 0 }}>
+        <button
+          onClick={startBake}
+          disabled={processing}
+          style={{
+            width: '100%',
+            padding: '12px 20px',
+            background: isBaked ? '#fa8c16' : '#1677ff',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 6,
+            fontSize: 15,
+            fontWeight: 700,
+            cursor: processing ? 'not-allowed' : 'pointer',
+            opacity: processing ? 0.7 : 1,
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+            transition: 'background 0.2s',
+          }}
+        >
+          {processing
+            ? t.bakingProgress(progress)
+            : isBaked
+              ? t.reBakeBtn
+              : t.startBakeBtn}
+        </button>
+      </div>
+
+      {/* 3. 烘焙完成后展示的下载区域 */}
+      {isBaked && (
+        <div style={{ borderTop: '1px dashed #d9d9d9', paddingTop: 14 }}>
+          <div style={{ fontSize: 12, color: '#555', marginBottom: 10, fontWeight: 500 }}>
             {t.currentExportInfo(startFrame, endFrame, frameCount, durationSec)}
           </div>
 

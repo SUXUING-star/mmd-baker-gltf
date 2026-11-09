@@ -1,23 +1,53 @@
 // src/solvers/mathUtils.ts
 import * as THREE from 'three';
+import { BONE_CANDIDATE_MAP, StandardBoneKey } from '../types/boneMapping';
 
 export const inv = (q: THREE.Quaternion) => q.clone().invert();
 export const mul = (pInv: THREE.Quaternion, childWorld: THREE.Quaternion) =>
   pInv.clone().multiply(childWorld).normalize();
 
-export const getV = (
-  lm: Record<string, [number, number, number]>,
-  name: string,
-  fallback = new THREE.Vector3()
-): THREE.Vector3 => {
-  const p = lm[name];
-  return p ? new THREE.Vector3(p[0], p[1], p[2]) : fallback.clone();
-};
-
 export const clamp = (val: number, min: number, max: number): number =>
   Math.max(Math.min(val, max), min);
 
-/** 正交基矩阵转四元数（杜绝奇异点与 NaN） */
+/**
+ * 健壮获取坐标向量：优先查标准语义键，次优查候选字典与别名
+ */
+export const getV = (
+  lm: Record<string, [number, number, number]>,
+  name: StandardBoneKey | string,
+  fallback = new THREE.Vector3()
+): THREE.Vector3 => {
+  // 1. 直查
+  if (lm[name]) {
+    return new THREE.Vector3(lm[name][0], lm[name][1], lm[name][2]);
+  }
+
+  // 2. 若是标准键，查候选字典别名
+  const candidates = BONE_CANDIDATE_MAP[name as StandardBoneKey];
+  if (candidates) {
+    for (const cand of candidates) {
+      if (lm[cand]) {
+        return new THREE.Vector3(lm[cand][0], lm[cand][1], lm[cand][2]);
+      }
+    }
+  }
+
+  return fallback.clone();
+};
+
+export const hasBone = (
+  lm: Record<string, [number, number, number]>,
+  name: StandardBoneKey | string
+): boolean => {
+  if (lm[name]) return true;
+  const candidates = BONE_CANDIDATE_MAP[name as StandardBoneKey];
+  if (candidates) {
+    return candidates.some((cand) => !!lm[cand]);
+  }
+  return false;
+};
+
+/** 正交基矩阵转四元数 */
 export function makeOrthoBasis(
   axisX: THREE.Vector3,
   axisY: THREE.Vector3,
@@ -39,7 +69,7 @@ export function makeOrthoBasis(
     : q.normalize();
 }
 
-/** 跨帧四元数符号连续化，防止相邻帧符号反相闪烁 */
+/** 跨帧四元数符号连续化 */
 export function ensureQuatContinuity(
   target: THREE.Quaternion,
   prev: THREE.Quaternion | undefined

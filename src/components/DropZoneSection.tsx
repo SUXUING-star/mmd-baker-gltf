@@ -7,24 +7,29 @@ interface DropZoneSectionProps {
   pipeline: MmdPipeline;
 }
 
-async function findPmxFromEntry(entry: any): Promise<File | null> {
+/** 深度遍历 FileSystemEntry，循环读取所有文件（解决超过 100 个文件截断的浏览器限制） */
+async function scanAllEntries(entry: any, fileList: File[]): Promise<void> {
   if (entry.isFile) {
-    if (entry.name.toLowerCase().endsWith('.pmx')) {
-      return new Promise<File>((resolve) => entry.file((f: File) => resolve(f)));
-    }
-    return null;
-  }
-  if (entry.isDirectory) {
+    const file = await new Promise<File>((resolve) => entry.file((f: File) => resolve(f)));
+    fileList.push(file);
+  } else if (entry.isDirectory) {
     const dirReader = entry.createReader();
-    const entries = await new Promise<any[]>((resolve) => {
-      dirReader.readEntries((res: any[]) => resolve(res), () => resolve([]));
-    });
+    const readAll = async (): Promise<any[]> => {
+      let results: any[] = [];
+      let batch: any[] = [];
+      do {
+        batch = await new Promise<any[]>((resolve) => {
+          dirReader.readEntries((res: any[]) => resolve(res), () => resolve([]));
+        });
+        results = results.concat(batch);
+      } while (batch.length > 0);
+      return results;
+    };
+    const entries = await readAll();
     for (const child of entries) {
-      const pmx = await findPmxFromEntry(child);
-      if (pmx) return pmx;
+      await scanAllEntries(child, fileList);
     }
   }
-  return null;
 }
 
 export const DropZoneSection: React.FC<DropZoneSectionProps> = ({ t, pipeline }) => {
@@ -38,30 +43,27 @@ export const DropZoneSection: React.FC<DropZoneSectionProps> = ({ t, pipeline })
     setIsPmxDragging(false);
     if (processing) return;
 
-    let foundPmx: File | null = null;
+    const allFiles: File[] = [];
     const items = e.dataTransfer.items;
 
     if (items && items.length > 0) {
       for (let i = 0; i < items.length; i++) {
         const entry = items[i].webkitGetAsEntry ? items[i].webkitGetAsEntry() : null;
         if (entry) {
-          const file = await findPmxFromEntry(entry);
-          if (file) {
-            foundPmx = file;
-            break;
-          }
+          await scanAllEntries(entry, allFiles);
         }
       }
     }
 
-    if (!foundPmx && e.dataTransfer.files) {
-      const files = Array.from(e.dataTransfer.files);
-      const match = files.find((f) => f.name.toLowerCase().endsWith('.pmx'));
-      if (match) foundPmx = match;
+    if (allFiles.length === 0 && e.dataTransfer.files) {
+      allFiles.push(...Array.from(e.dataTransfer.files));
     }
 
+    const foundPmx = allFiles.find((f) => f.name.toLowerCase().endsWith('.pmx'));
+
     if (foundPmx) {
-      selectPmx(foundPmx);
+      // 传递主 PMX 文件，以及文件夹中所有图片贴图等附件
+      selectPmx(foundPmx, allFiles);
     } else {
       alert(t.pmxAlert);
     }
@@ -82,7 +84,7 @@ export const DropZoneSection: React.FC<DropZoneSectionProps> = ({ t, pipeline })
     const files = e.target.files ? Array.from(e.target.files) : [];
     const pmx = files.find((f) => f.name.toLowerCase().endsWith('.pmx'));
     if (pmx) {
-      selectPmx(pmx);
+      selectPmx(pmx, files);
     } else {
       alert(t.pmxAlert);
     }
@@ -130,7 +132,10 @@ export const DropZoneSection: React.FC<DropZoneSectionProps> = ({ t, pipeline })
           accept=".pmx"
           style={{ display: 'none' }}
           disabled={processing}
-          onChange={(e) => selectPmx(e.target.files?.[0] || null)}
+          onChange={(e) => {
+            const file = e.target.files?.[0] || null;
+            selectPmx(file, file ? [file] : []);
+          }}
         />
         <input
           ref={folderInputRef}

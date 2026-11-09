@@ -4,7 +4,7 @@ export type Lang = 'zh' | 'en';
 export const I18N = {
   zh: {
     title: 'MMD 动作转 Humanoid / VRMA 动捕解算器',
-    statusLabel: '解算状态：',
+    statusLabel: '当前状态：',
     baseModel: '基准绑定模型',
     defaultModelName: '默认模型 (甘雨.pmx)',
     changeModel: '选择 PMX 文件',
@@ -16,9 +16,12 @@ export const I18N = {
     vmdAlert: '请放入正确的 .vmd 动作文件！',
     vmdLoaded: (name: string) => `已载入动作: ${name}`,
     vmdPlaceholder: '点击选择 或 拖入待转换的 .vmd 动作文件',
-    vmdHint: '拖入后自动解析，直接在时间轴裁剪并下载',
+    vmdHint: '拖入后点击下方按钮开始烘焙骨骼数据',
+    // 烘焙控制主按钮
+    startBakeBtn: '🚀 开始烘焙解算骨骼 (Start Bake)',
+    reBakeBtn: '🔄 重新烘焙解算骨骼',
     bakingProgress: (p: number) => `正在烘焙解算骨骼 (${p}%)...`,
-    testDefaultBtn: '载入默认动作 (奶蛙上掌下拳)',
+    testDefaultBtn: '载入默认演示 (甘雨 + 奶蛙拳)',
     // 下载按钮
     downloadVrma: '下载当前片段 VRMA (.vrma)',
     downloadGlb: '下载当前片段 GLB (.glb)',
@@ -47,11 +50,11 @@ export const I18N = {
     metaLicense: '授权协议 (License URL)',
     metaLicensePlaceholder: '如 https://vrm.dev/licenses/1.0/',
     // 状态文案
-    statusReady: '就绪：请放入 VMD 动作文件',
+    statusReady: '就绪：模型与动作已就位，请点击【开始烘焙解算】',
     statusAnalyzing: '正在解析动作并提取 3D 骨骼...',
-    statusReadyToExport: '动作已就绪！调整上方时间轴区间后直接点击下载',
+    statusReadyToExport: '烘焙完成！可自由调整上方时间轴区间，随时点击下方下载',
     statusSolvingHumanoid: '正在导出文件...',
-    statusError: (msg: string) => `错误: ${msg}`,
+    statusError: (msg: string) => `解算失败: ${msg}`,
   },
   en: {
     title: 'MMD Motion to Humanoid / VRMA MoCap Solver',
@@ -67,9 +70,12 @@ export const I18N = {
     vmdAlert: 'Please provide a valid .vmd motion file!',
     vmdLoaded: (name: string) => `Loaded Motion: ${name}`,
     vmdPlaceholder: 'Click or Drag & Drop .vmd file here',
-    vmdHint: 'Auto loaded into timeline for instant trimming and download',
+    vmdHint: 'Drop file and click button below to bake bones',
+    // Baking main button
+    startBakeBtn: '🚀 Start Baking Motion',
+    reBakeBtn: '🔄 Re-Bake Motion',
     bakingProgress: (p: number) => `Baking MMD bones (${p}%)...`,
-    testDefaultBtn: 'Load Default Motion',
+    testDefaultBtn: 'Load Default Demo (Ganyu + Punch)',
     // Download Buttons
     downloadVrma: 'Download VRMA (.vrma)',
     downloadGlb: 'Download Humanoid (.glb)',
@@ -98,9 +104,9 @@ export const I18N = {
     metaLicense: 'License URL',
     metaLicensePlaceholder: 'e.g. https://vrm.dev/licenses/1.0/',
     // 状态文案
-    statusReady: 'Ready: Load a .vmd motion file',
+    statusReady: 'Ready: Model & motion selected, click [Start Baking] below',
     statusAnalyzing: 'Analyzing & baking MMD keyframes...',
-    statusReadyToExport: 'Motion ready! Trim range on timeline and click download directly',
+    statusReadyToExport: 'Bake complete! Trim range on timeline and click download directly',
     statusSolvingHumanoid: 'Exporting file...',
     statusError: (msg: string) => `Error: ${msg}`,
   },
