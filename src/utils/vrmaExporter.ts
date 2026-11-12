@@ -3,6 +3,7 @@ import type { VRMCVRMAnimation } from '@pixiv/types-vrmc-vrm-animation-1.0';
 import * as THREE from 'three';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 import { HUMANOID_BONES, HumanoidBoneName, LandmarkData } from '../types/types';
+import { DEFAULT_LOOP_OPTIONS, LoopBlendOptions } from './loopBlender';
 import { solveAllHumanoidQuaternions } from './mathSolver';
 
 /** VRMA 元数据配置接口 */
@@ -102,14 +103,16 @@ function createHumanoidBoneNodes(): { scene: THREE.Scene; bones: Record<Humanoid
 /**
  * 导出符合 Pixiv 官方 VRMC_vrm_animation 1.0 规范的纯动作文件 (.vrma)
  */
-export async function exportFull52VRMA(
-  json: LandmarkData,
-  metaOptions?: VrmaMetaOptions
-): Promise<Blob> {
+
+ export async function exportFull52VRMA(
+   json: LandmarkData,
+   metaOptions?: VrmaMetaOptions,
+   loopOptions: LoopBlendOptions = DEFAULT_LOOP_OPTIONS
+ ): Promise<Blob> {
   const { scene, bones } = createHumanoidBoneNodes();
   scene.add(bones.hips);
 
-  const { times, hipsPositions, quatTracksData } = solveAllHumanoidQuaternions(json);
+  const { times, hipsPositions, quatTracksData } = solveAllHumanoidQuaternions(json, loopOptions);
 
   const tracks: THREE.KeyframeTrack[] = [];
   tracks.push(new THREE.VectorKeyframeTrack('hips.position', times, hipsPositions));

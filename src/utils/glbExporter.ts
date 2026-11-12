@@ -2,9 +2,13 @@
 import * as THREE from 'three';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 import { HUMANOID_BONES, HumanoidBoneName, LandmarkData } from '../types/types';
+import { DEFAULT_LOOP_OPTIONS, LoopBlendOptions } from './loopBlender';
 import { solveAllHumanoidQuaternions } from './mathSolver';
 
-export async function exportFull52HumanoidGLB(json: LandmarkData): Promise<Blob> {
+export async function exportFull52HumanoidGLB(
+  json: LandmarkData,
+  loopOptions: LoopBlendOptions = DEFAULT_LOOP_OPTIONS
+): Promise<Blob> {
   const scene = new THREE.Scene();
 
   const bones: Record<HumanoidBoneName, THREE.Bone> = {} as any;
@@ -110,7 +114,7 @@ export async function exportFull52HumanoidGLB(json: LandmarkData): Promise<Blob>
   scene.add(skinnedMesh);
 
   // 关键帧四元数求解
-  const { times, hipsPositions, quatTracksData } = solveAllHumanoidQuaternions(json);
+  const { times, hipsPositions, quatTracksData } = solveAllHumanoidQuaternions(json, loopOptions);
 
   const tracks: THREE.KeyframeTrack[] = [];
   tracks.push(new THREE.VectorKeyframeTrack('hips.position', times, hipsPositions));

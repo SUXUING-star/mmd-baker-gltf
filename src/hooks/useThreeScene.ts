@@ -140,14 +140,45 @@ export function useThreeScene(containerRef: React.RefObject<HTMLDivElement | nul
     });
   }, []);
 
+  // 关键增强：支持首尾动作平滑过渡预览
   const setMmdTime = useCallback(
-    (time: number, landmarks?: Record<string, [number, number, number]>) => {
-      if (mixerRef.current) {
-        mixerRef.current.setTime(time);
+    (
+      time: number,
+      landmarks?: Record<string, [number, number, number]>,
+      blendTarget?: { startTime: number; weight: number }
+    ) => {
+      if (mixerRef.current && currentMeshRef.current) {
+        if (blendTarget && blendTarget.weight > 0) {
+          const w = blendTarget.weight;
+          const curMesh = currentMeshRef.current as THREE.SkinnedMesh;
+
+          // 1. 采样当前帧姿态
+          mixerRef.current.setTime(time);
+          currentMeshRef.current.updateMatrixWorld(true);
+
+          if (curMesh.skeleton && curMesh.skeleton.bones.length > 0) {
+            const curQuats = curMesh.skeleton.bones.map((b) => b.quaternion.clone());
+            const curPositions = curMesh.skeleton.bones.map((b) => b.position.clone());
+
+            // 2. 采样首帧姿态
+            mixerRef.current.setTime(blendTarget.startTime);
+            currentMeshRef.current.updateMatrixWorld(true);
+
+            // 3. Slerp / Lerp 混合
+            curMesh.skeleton.bones.forEach((bone, idx) => {
+              const targetQ = bone.quaternion.clone();
+              const targetP = bone.position.clone();
+              bone.quaternion.copy(curQuats[idx]).slerp(targetQ, w);
+              bone.position.copy(curPositions[idx]).lerp(targetP, w);
+            });
+            currentMeshRef.current.updateMatrixWorld(true);
+          }
+        } else {
+          mixerRef.current.setTime(time);
+          currentMeshRef.current.updateMatrixWorld(true);
+        }
       }
-      if (currentMeshRef.current) {
-        currentMeshRef.current.updateMatrixWorld(true);
-      }
+
       if (landmarks) {
         renderLandmarksPositions(landmarks);
       }

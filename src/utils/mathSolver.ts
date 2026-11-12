@@ -7,8 +7,12 @@ import { ensureQuatContinuity, getV, hasBone } from '../solvers/mathUtils';
 import { solveSpine } from '../solvers/spineSolver';
 import { StandardBone } from '../types/boneMapping';
 import { HUMANOID_BONES, HumanoidBoneName, LandmarkData } from '../types/types';
+import { blendMotionForLoop, DEFAULT_LOOP_OPTIONS, LoopBlendOptions } from './loopBlender';
 
-export function solveAllHumanoidQuaternions(data: LandmarkData) {
+export function solveAllHumanoidQuaternions(
+  data: LandmarkData,
+  loopOptions: LoopBlendOptions = DEFAULT_LOOP_OPTIONS
+) {
   const { frames } = data;
   if (frames.length === 0) {
     return { times: [], hipsPositions: [], quatTracksData: {} as any };
@@ -16,7 +20,6 @@ export function solveAllHumanoidQuaternions(data: LandmarkData) {
 
   const f0 = frames[0].landmarks;
 
-  // 使用标准语义检索起始脚踝与骨盆高度
   const pPelvis0 = hasBone(f0, StandardBone.Hips)
     ? getV(f0, StandardBone.Hips)
     : getV(f0, StandardBone.Root, new THREE.Vector3(0, 9.5, 0));
@@ -88,6 +91,16 @@ export function solveAllHumanoidQuaternions(data: LandmarkData) {
     for (let i = 0; i < frameCount; i++) {
       hipsPositions[i * 3 + 1] = smoothedY[i];
     }
+  }
+
+  // 后处理：动作循环衔接（可选）
+  if (loopOptions.enabled) {
+    const blended = blendMotionForLoop(times, hipsPositions, quatTracksData, loopOptions);
+    return {
+      times,
+      hipsPositions: blended.hipsPositions,
+      quatTracksData: blended.quatTracksData,
+    };
   }
 
   return { times, hipsPositions, quatTracksData };

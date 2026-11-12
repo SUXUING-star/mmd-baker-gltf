@@ -4,6 +4,7 @@ import { I18N, Lang } from '../i18n';
 import { LandmarkData } from '../types/types';
 import { bakePure3DLandmarks } from '../utils/baker';
 import { exportFull52HumanoidGLB } from '../utils/glbExporter';
+import { DEFAULT_LOOP_OPTIONS, LoopBlendOptions } from '../utils/loopBlender';
 import { findBestLoopEndFrame, trimLandmarkData } from '../utils/motionTrimmer';
 import { exportFull52VRMA, VrmaMetaOptions } from '../utils/vrmaExporter';
 
@@ -29,7 +30,6 @@ export interface MmdPipeline {
   progress: number;
   processing: boolean;
   exportingType: string | null;
-  // 文件状态
   customPmxFile: File | null;
   vmdFile: File | null;
   activePmxTarget: File | string;
@@ -37,13 +37,13 @@ export interface MmdPipeline {
   selectPmx: (file: File | null, extraFiles?: File[]) => void;
   selectVmd: (file: File) => void;
   resetPmx: () => void;
-  // 控制核心
   timeline: TimelineController;
   startBake: () => Promise<void>;
   loadDefaultDemo: () => Promise<void>;
   downloadVrma: (metaOptions?: VrmaMetaOptions) => Promise<void>;
   downloadGlb: () => Promise<void>;
   downloadBoth: (metaOptions?: VrmaMetaOptions) => Promise<void>;
+  applyLoopAndRefresh: (newOptions?: LoopBlendOptions) => void;
 }
 
 interface ThreeBridge {
@@ -51,7 +51,11 @@ interface ThreeBridge {
   clearCurrentMesh: () => void;
   clearPoints: () => void;
   setupMmdAnimation: (mesh: any, animation: any) => void;
-  setMmdTime: (time: number, landmarks?: Record<string, [number, number, number]>) => void;
+  setMmdTime: (
+    time: number,
+    landmarks?: Record<string, [number, number, number]>,
+    blendTarget?: { startTime: number; weight: number }
+  ) => void;
   updateLandmarks: (mesh: any, landmarks: Record<string, [number, number, number]>) => void;
   renderLandmarksPositions: (landmarks: Record<string, [number, number, number]>) => void;
 }
@@ -71,7 +75,8 @@ export function useMmdPipeline(
   threeBridge: ThreeBridge,
   defaultPmxPath: string,
   defaultVmdPath: string,
-  lang: Lang = 'zh'
+  lang: Lang = 'zh',
+  loopOptions: LoopBlendOptions = DEFAULT_LOOP_OPTIONS
 ): MmdPipeline {
   const [statusType, setStatusType] = useState<StatusType>('ready');
   const [errorMessage, setErrorMessage] = useState<string>('');
@@ -93,6 +98,8 @@ export function useMmdPipeline(
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
 
   const timerRef = useRef<number | null>(null);
+  const loopOptionsRef = useRef<LoopBlendOptions>(loopOptions);
+  loopOptionsRef.current = loopOptions;
 
   const activePmxTarget = useMemo(() => customPmxFile || defaultPmxPath, [customPmxFile, defaultPmxPath]);
   const activeVmdTarget = useMemo(() => vmdFile || defaultVmdPath, [vmdFile, defaultVmdPath]);
@@ -109,18 +116,82 @@ export function useMmdPipeline(
     return () => stopPlayback();
   }, [stopPlayback]);
 
+  // 一帧渲染到 ThreeJS，根据 loopOptions 计算平滑
+  const renderFrameWithLoopBlend = useCallback(
+    (frameIdx: number) => {
+      const data = rawLandmarkDataRef.current;
+      if (!data) return;
+
+      const targetFrame = data.frames[frameIdx];
+      const startFrameData = data.frames[startFrame];
+      const endFrameData = data.frames[endFrame];
+      if (!targetFrame || !startFrameData || !endFrameData) return;
+
+      const opts = loopOptionsRef.current;
+      let blendWeight = 0;
+      let blendedLandmarks = targetFrame.landmarks;
+
+      if (opts.enabled && endFrame > startFrame) {
+        const loopFrames = endFrame - startFrame + 1;
+        const relativeIdx = frameIdx - startFrame;
+        const u = Math.max(0, Math.min(1, relativeIdx / (loopFrames - 1)));
+
+        if (opts.mode === 'idle') {
+          blendWeight = 0.5 * (1 - Math.cos(Math.PI * u));
+
+          blendedLandmarks = {};
+          for (const k in targetFrame.landmarks) {
+            const pCur = targetFrame.landmarks[k];
+            const pStart = startFrameData.landmarks[k] || pCur;
+            const pEnd = endFrameData.landmarks[k] || pCur;
+            const deltaP = [pStart[0] - pEnd[0], pStart[1] - pEnd[1], pStart[2] - pEnd[2]];
+
+            blendedLandmarks[k] = [
+              pCur[0] + deltaP[0] * blendWeight,
+              pCur[1] + deltaP[1] * blendWeight,
+              pCur[2] + deltaP[2] * blendWeight,
+            ];
+          }
+        } else if (opts.mode === 'tail') {
+          const blendSec = Math.min(opts.blendDuration, (loopFrames / (fps || 30)) * 0.45);
+          const blendFrames = Math.max(2, Math.round(blendSec * (fps || 30)));
+          const blendStart = endFrame - blendFrames;
+
+          if (frameIdx >= blendStart && frameIdx <= endFrame) {
+            const localU = (frameIdx - blendStart + 1) / blendFrames;
+            blendWeight = 0.5 * (1 - Math.cos(Math.PI * localU));
+
+            blendedLandmarks = {};
+            for (const k in targetFrame.landmarks) {
+              const pCur = targetFrame.landmarks[k];
+              const pStart = startFrameData.landmarks[k] || pCur;
+              blendedLandmarks[k] = [
+                pCur[0] * (1 - blendWeight) + pStart[0] * blendWeight,
+                pCur[1] * (1 - blendWeight) + pStart[1] * blendWeight,
+                pCur[2] * (1 - blendWeight) + pStart[2] * blendWeight,
+              ];
+            }
+          }
+        }
+      }
+
+      threeBridge.setMmdTime(
+        targetFrame.time,
+        blendedLandmarks,
+        blendWeight > 0 ? { startTime: startFrameData.time, weight: blendWeight } : undefined
+      );
+    },
+    [startFrame, endFrame, fps, threeBridge]
+  );
+
   const seekToFrame = useCallback(
     (frameIdx: number) => {
       if (!rawLandmarkDataRef.current) return;
-      const frames = rawLandmarkDataRef.current.frames;
-      const safeIdx = Math.max(0, Math.min(frameIdx, frames.length - 1));
+      const safeIdx = Math.max(0, Math.min(frameIdx, rawLandmarkDataRef.current.frames.length - 1));
       setCurrentFrame(safeIdx);
-      const targetFrame = frames[safeIdx];
-      if (targetFrame) {
-        threeBridge.setMmdTime(targetFrame.time, targetFrame.landmarks);
-      }
+      renderFrameWithLoopBlend(safeIdx);
     },
-    [threeBridge]
+    [renderFrameWithLoopBlend]
   );
 
   const togglePlay = useCallback(() => {
@@ -139,14 +210,24 @@ export function useMmdPipeline(
         if (next > endFrame || next < startFrame) {
           next = startFrame;
         }
-        const targetFrame = rawLandmarkDataRef.current?.frames[next];
-        if (targetFrame) {
-          threeBridge.setMmdTime(targetFrame.time, targetFrame.landmarks);
-        }
+        renderFrameWithLoopBlend(next);
         return next;
       });
     }, intervalMs);
-  }, [isPlaying, startFrame, endFrame, fps, threeBridge, stopPlayback]);
+  }, [isPlaying, startFrame, endFrame, fps, renderFrameWithLoopBlend, stopPlayback]);
+
+  // 点击【生效确认】时由组件调用的重绘方法
+  const applyLoopAndRefresh = useCallback(
+    (newOptions?: LoopBlendOptions) => {
+      if (newOptions) {
+        loopOptionsRef.current = newOptions;
+      }
+      stopPlayback();
+      seekToFrame(startFrame);
+      togglePlay();
+    },
+    [startFrame, seekToFrame, stopPlayback, togglePlay]
+  );
 
   const autoSnapLoopEnd = useCallback(() => {
     if (!rawLandmarkDataRef.current) return;
@@ -183,7 +264,6 @@ export function useMmdPipeline(
     [maxFrames, fps, currentFrame, startFrame, endFrame, isPlaying, togglePlay, stopPlayback, seekToFrame, autoSnapLoopEnd]
   );
 
-  // 执行核心烘焙
   const runBake = useCallback(
     async (pmxTarget: File | string, vmdTarget: File | string, extraFiles: File[]) => {
       try {
@@ -229,10 +309,7 @@ export function useMmdPipeline(
           playIdx++;
           if (playIdx > defaultEnd) playIdx = 0;
           setCurrentFrame(playIdx);
-          const targetFrame = landmarkData.frames[playIdx];
-          if (targetFrame) {
-            threeBridge.setMmdTime(targetFrame.time, targetFrame.landmarks);
-          }
+          renderFrameWithLoopBlend(playIdx);
         }, intervalMs);
       } catch (err: unknown) {
         console.error(err);
@@ -243,15 +320,13 @@ export function useMmdPipeline(
         setProcessing(false);
       }
     },
-    [threeBridge, stopPlayback]
+    [threeBridge, stopPlayback, renderFrameWithLoopBlend]
   );
 
-  // 用户点击【开始烘焙解算】按钮调用此方法
   const startBake = useCallback(async () => {
     await runBake(activePmxTarget, activeVmdTarget, customExtraFiles);
   }, [runBake, activePmxTarget, activeVmdTarget, customExtraFiles]);
 
-  // 载入默认示例
   const loadDefaultDemo = useCallback(async () => {
     setCustomPmxFile(null);
     setCustomExtraFiles([]);
@@ -259,14 +334,11 @@ export function useMmdPipeline(
     await runBake(defaultPmxPath, defaultVmdPath, []);
   }, [runBake, defaultPmxPath, defaultVmdPath]);
 
-  const selectPmx = useCallback(
-    (file: File | null, extraFiles: File[] = []) => {
-      setCustomPmxFile(file);
-      setCustomExtraFiles(extraFiles);
-      setStatusType('ready');
-    },
-    []
-  );
+  const selectPmx = useCallback((file: File | null, extraFiles: File[] = []) => {
+    setCustomPmxFile(file);
+    setCustomExtraFiles(extraFiles);
+    setStatusType('ready');
+  }, []);
 
   const selectVmd = useCallback((file: File) => {
     setVmdFile(file);
@@ -292,12 +364,16 @@ export function useMmdPipeline(
       try {
         setExportingType('vrma');
         const trimmed = trimLandmarkData(rawLandmarkDataRef.current, startFrame, endFrame);
-        const blob = await exportFull52VRMA(trimmed, {
-          title: metaOptions?.title || getBaseFilename(),
-          authors: metaOptions?.authors,
-          copyrightInformation: metaOptions?.copyrightInformation,
-          licenseUrl: metaOptions?.licenseUrl,
-        });
+        const blob = await exportFull52VRMA(
+          trimmed,
+          {
+            title: metaOptions?.title || getBaseFilename(),
+            authors: metaOptions?.authors,
+            copyrightInformation: metaOptions?.copyrightInformation,
+            licenseUrl: metaOptions?.licenseUrl,
+          },
+          loopOptionsRef.current
+        );
         triggerBrowserDownload(blob, `${getBaseFilename()}_[${startFrame}-${endFrame}].vrma`);
       } catch (err) {
         alert('导出 VRMA 失败: ' + err);
@@ -313,7 +389,7 @@ export function useMmdPipeline(
     try {
       setExportingType('glb');
       const trimmed = trimLandmarkData(rawLandmarkDataRef.current, startFrame, endFrame);
-      const blob = await exportFull52HumanoidGLB(trimmed);
+      const blob = await exportFull52HumanoidGLB(trimmed, loopOptionsRef.current);
       triggerBrowserDownload(blob, `${getBaseFilename()}_[${startFrame}-${endFrame}].glb`);
     } catch (err) {
       alert('导出 GLB 失败: ' + err);
@@ -365,5 +441,6 @@ export function useMmdPipeline(
     downloadVrma,
     downloadGlb,
     downloadBoth,
+    applyLoopAndRefresh,
   };
 }

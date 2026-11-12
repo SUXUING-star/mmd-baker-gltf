@@ -3,8 +3,10 @@ import { useMemo, useRef, useState } from 'react';
 import { ClipSection } from './components/ClipSection';
 import { DownloadSection } from './components/DownloadSection';
 import { DropZoneSection } from './components/DropZoneSection';
+import { LoopTransitionSection } from './components/LoopTransitionSection';
 import { MetadataSection } from './components/MetadataSection';
 import { ThreeCanvas } from './components/ThreeCanvas';
+import { useLoopOptions } from './hooks/useLoopOptions';
 import { useMmdPipeline } from './hooks/useMmdPipeline';
 import { useThreeScene } from './hooks/useThreeScene';
 import { useVrmaMetadata } from './hooks/useVrmaMetadata';
@@ -24,8 +26,11 @@ export default function App() {
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const threeBridge = useThreeScene(canvasContainerRef);
 
-  const pipeline = useMmdPipeline(threeBridge, DEFAULT_PMX_PATH, DEFAULT_VMD_PATH, lang);
+  const loopState = useLoopOptions();
+  const pipeline = useMmdPipeline(threeBridge, DEFAULT_PMX_PATH, DEFAULT_VMD_PATH, lang, loopState.loopOptions);
   const meta = useVrmaMetadata();
+
+  const isBaked = pipeline.timeline.maxFrames > 0;
 
   const switchLanguage = (newLang: Lang) => {
     setLang(newLang);
@@ -36,7 +41,7 @@ export default function App() {
     <div style={{ minHeight: '100vh', width: '100%', background: '#ffffff', padding: '24px 0', boxSizing: 'border-box', overflowY: 'auto' }}>
       <div style={{ maxWidth: 960, margin: '0 auto', padding: '0 20px' }}>
 
-        {/* 顶部语言切换 */}
+        {/* 顶部标题与语言切换 */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <h2 style={{ margin: 0, color: '#111', fontSize: 20, fontWeight: 700 }}>{t.title}</h2>
           <div style={{ display: 'flex', gap: 4, background: '#f0f0f0', padding: 3, borderRadius: 6 }}>
@@ -67,13 +72,22 @@ export default function App() {
         {/* 2. 时间轴剪辑控制器 */}
         <ClipSection t={t} timeline={pipeline.timeline} disabled={pipeline.processing} />
 
-        {/* 3. 模型与动作文件投递区 */}
+        {/* 3. 动作循环衔接面板（配置生效时通过 onApply 通知 pipeline 刷新 3D 渲染） */}
+        <LoopTransitionSection
+          t={t}
+          loopState={loopState}
+          disabled={pipeline.processing}
+          isBaked={isBaked}
+          onApply={(opts) => pipeline.applyLoopAndRefresh(opts)}
+        />
+
+        {/* 4. 模型与动作文件投递区 */}
         <DropZoneSection t={t} pipeline={pipeline} />
 
-        {/* 4. VRMA Metadata 表单 */}
+        {/* 5. VRMA Metadata 表单 */}
         <MetadataSection t={t} meta={meta} disabled={pipeline.processing} />
 
-        {/* 5. 核心烘焙控制与下载面板 */}
+        {/* 6. 核心烘焙控制与下载面板 */}
         <DownloadSection t={t} pipeline={pipeline} meta={meta} />
 
       </div>
