@@ -358,13 +358,27 @@ export function useMmdPipeline(
       : target.name.replace(/\.[^/.]+$/, '');
   }, [activeVmdTarget]);
 
-  const downloadVrma = useCallback(
-    async (metaOptions?: VrmaMetaOptions) => {
+  const runExport = useCallback(
+    async (format: 'vrma' | 'glb', buildBlob: (trimmed: LandmarkData) => Promise<Blob>) => {
       if (!rawLandmarkDataRef.current) return;
       try {
-        setExportingType('vrma');
+        setExportingType(format);
         const trimmed = trimLandmarkData(rawLandmarkDataRef.current, startFrame, endFrame);
-        const blob = await exportFull52VRMA(
+        const blob = await buildBlob(trimmed);
+        triggerBrowserDownload(blob, `${getBaseFilename()}_[${startFrame}-${endFrame}].${format}`);
+      } catch (err) {
+        alert(`导出 ${format.toUpperCase()} 失败: ${err}`);
+      } finally {
+        setExportingType(null);
+      }
+    },
+    [startFrame, endFrame, getBaseFilename]
+  );
+
+  const downloadVrma = useCallback(
+    (metaOptions?: VrmaMetaOptions) =>
+      runExport('vrma', (trimmed) =>
+        exportFull52VRMA(
           trimmed,
           {
             title: metaOptions?.title || getBaseFilename(),
@@ -373,30 +387,15 @@ export function useMmdPipeline(
             licenseUrl: metaOptions?.licenseUrl,
           },
           loopOptionsRef.current
-        );
-        triggerBrowserDownload(blob, `${getBaseFilename()}_[${startFrame}-${endFrame}].vrma`);
-      } catch (err) {
-        alert('导出 VRMA 失败: ' + err);
-      } finally {
-        setExportingType(null);
-      }
-    },
-    [startFrame, endFrame, getBaseFilename]
+        )
+      ),
+    [runExport, getBaseFilename]
   );
 
-  const downloadGlb = useCallback(async () => {
-    if (!rawLandmarkDataRef.current) return;
-    try {
-      setExportingType('glb');
-      const trimmed = trimLandmarkData(rawLandmarkDataRef.current, startFrame, endFrame);
-      const blob = await exportFull52HumanoidGLB(trimmed, loopOptionsRef.current);
-      triggerBrowserDownload(blob, `${getBaseFilename()}_[${startFrame}-${endFrame}].glb`);
-    } catch (err) {
-      alert('导出 GLB 失败: ' + err);
-    } finally {
-      setExportingType(null);
-    }
-  }, [startFrame, endFrame, getBaseFilename]);
+  const downloadGlb = useCallback(
+    () => runExport('glb', (trimmed) => exportFull52HumanoidGLB(trimmed, loopOptionsRef.current)),
+    [runExport]
+  );
 
   const downloadBoth = useCallback(
     async (metaOptions?: VrmaMetaOptions) => {
