@@ -19,6 +19,7 @@ export function solveAllHumanoidQuaternions(
   }
 
   const f0 = frames[0].landmarks;
+  const restLm = data.restLandmarks;
 
   const pPelvis0 = hasBone(f0, StandardBone.Hips)
     ? getV(f0, StandardBone.Hips)
@@ -45,13 +46,14 @@ export function solveAllHumanoidQuaternions(
     times.push(frame.time);
 
     const hips = solveHips(lm, scaleFactor, ankleBaseY);
-    const spine = solveSpine(lm, hips.hipsWorldQ, hips.hipForward);
+    const spine = solveSpine(lm, hips.hipsWorldQ, hips.hipForward, restLm);
     const limbs = solveLimbs(
       lm,
       spine.spineWorldQ,
       hips.hipsWorldQ,
       hips.hipSideOrtho,
-      hips.hipUp
+      spine.spineUp,
+      restLm
     );
 
     const leftFingers = solveFingers(lm, true);
@@ -76,21 +78,74 @@ export function solveAllHumanoidQuaternions(
     });
   }
 
-  // 5 点高斯滤波平滑
+  // 5 点高斯滤波平滑：hipsPositions X / Y / Z 全轴
   const frameCount = times.length;
   if (frameCount > 4) {
-    const smoothedY = new Float32Array(frameCount);
-    for (let i = 0; i < frameCount; i++) {
-      const p0 = hipsPositions[Math.max(0, i - 2) * 3 + 1];
-      const p1 = hipsPositions[Math.max(0, i - 1) * 3 + 1];
-      const p2 = hipsPositions[i * 3 + 1];
-      const p3 = hipsPositions[Math.min(frameCount - 1, i + 1) * 3 + 1];
-      const p4 = hipsPositions[Math.min(frameCount - 1, i + 2) * 3 + 1];
-      smoothedY[i] = (p0 + p1 * 2 + p2 * 4 + p3 * 2 + p4) / 10;
+    for (let axis = 0; axis < 3; axis++) {
+      const smoothed = new Float32Array(frameCount);
+      for (let i = 0; i < frameCount; i++) {
+        const p0 = hipsPositions[Math.max(0, i - 2) * 3 + axis];
+        const p1 = hipsPositions[Math.max(0, i - 1) * 3 + axis];
+        const p2 = hipsPositions[i * 3 + axis];
+        const p3 = hipsPositions[Math.min(frameCount - 1, i + 1) * 3 + axis];
+        const p4 = hipsPositions[Math.min(frameCount - 1, i + 2) * 3 + axis];
+        smoothed[i] = (p0 + p1 * 2 + p2 * 4 + p3 * 2 + p4) / 10;
+      }
+      for (let i = 0; i < frameCount; i++) {
+        hipsPositions[i * 3 + axis] = smoothed[i];
+      }
     }
-    for (let i = 0; i < frameCount; i++) {
-      hipsPositions[i * 3 + 1] = smoothedY[i];
-    }
+
+    // 5 点加权同半球四元数平滑 [1, 3, 6, 3, 1] / 14
+    const weights = [1, 3, 6, 3, 1];
+    HUMANOID_BONES.forEach((k) => {
+      const arr = quatTracksData[k];
+      const out = new Float32Array(frameCount * 4);
+
+      for (let i = 0; i < frameCount; i++) {
+        const cx = arr[i * 4];
+        const cy = arr[i * 4 + 1];
+        const cz = arr[i * 4 + 2];
+        const cw = arr[i * 4 + 3];
+
+        let sx = 0;
+        let sy = 0;
+        let sz = 0;
+        let sw = 0;
+
+        for (let offset = -2; offset <= 2; offset++) {
+          const idx = Math.max(0, Math.min(frameCount - 1, i + offset));
+          const w = weights[offset + 2];
+          let qx = arr[idx * 4];
+          let qy = arr[idx * 4 + 1];
+          let qz = arr[idx * 4 + 2];
+          let qw = arr[idx * 4 + 3];
+
+          // 确保同半球累加
+          if (qx * cx + qy * cy + qz * cz + qw * cw < 0) {
+            qx = -qx;
+            qy = -qy;
+            qz = -qz;
+            qw = -qw;
+          }
+
+          sx += qx * w;
+          sy += qy * w;
+          sz += qz * w;
+          sw += qw * w;
+        }
+
+        const len = Math.hypot(sx, sy, sz, sw) || 1;
+        out[i * 4] = sx / len;
+        out[i * 4 + 1] = sy / len;
+        out[i * 4 + 2] = sz / len;
+        out[i * 4 + 3] = sw / len;
+      }
+
+      for (let j = 0; j < out.length; j++) {
+        arr[j] = out[j];
+      }
+    });
   }
 
   // 后处理：动作循环衔接（可选）

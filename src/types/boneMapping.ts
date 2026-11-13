@@ -9,6 +9,8 @@ export const StandardBone = {
   Chest: 'Chest',
   Neck: 'Neck',
   Head: 'Head',
+  LeftEye: 'LeftEye',
+  RightEye: 'RightEye',
 
   LeftShoulder: 'LeftShoulder',
   LeftUpperArm: 'LeftUpperArm',
@@ -64,6 +66,8 @@ export const BONE_CANDIDATE_MAP: Record<StandardBoneKey, string[]> = {
   [StandardBone.Chest]: ['上半身2', 'Chest', 'chest', '胸', 'Spine2', 'upperChest'],
   [StandardBone.Neck]: ['首', 'Neck', 'neck'],
   [StandardBone.Head]: ['頭', 'Head', 'head'],
+  [StandardBone.LeftEye]: ['左目', 'EyeL', 'Eye_L', 'leftEye', 'eye.L'],
+  [StandardBone.RightEye]: ['右目', 'EyeR', 'Eye_R', 'rightEye', 'eye.R'],
 
   [StandardBone.LeftShoulder]: ['左肩', 'ShoulderL', 'Shoulder_L', 'leftShoulder', 'shoulder.L'],
   [StandardBone.LeftUpperArm]: ['左腕', 'UpperArmL', 'Arm_L', 'UpperArm_L', 'leftUpperArm', 'arm.L'],

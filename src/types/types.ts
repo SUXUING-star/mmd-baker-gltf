@@ -60,6 +60,8 @@ export interface LandmarkData {
   totalFrames: number;
   duration: number;
   frames: LandmarkFrame[];
+  /** 模型静止 T-Pose / Rest Pose 下的骨骼世界坐标，用于扣除初始偏角 */
+  restLandmarks?: Record<string, [number, number, number]>;
   /** 当前 PMX 模型自身携带的全部表情 Morph 信息 */
   availableMorphs?: ModelMorphInfo[];
 }

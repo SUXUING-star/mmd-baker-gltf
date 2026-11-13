@@ -1,38 +1,19 @@
 // src/solvers/limbSolver.ts
 import * as THREE from 'three';
-import { StandardBone } from '../types/boneMapping';
-import { getV, inv, makeOrthoBasis, mul } from './mathUtils';
+import { StandardBone, StandardBoneKey } from '../types/boneMapping';
+import { clamp, getV, hasBone, inv, makeOrthoBasis, mul } from './mathUtils';
 
 function solveAnatomicalLimb(
   P1: THREE.Vector3,
   P2: THREE.Vector3,
   P3: THREE.Vector3,
-  type: 'leftArm' | 'rightArm' | 'leg',
-  sideRef: THREE.Vector3,
+  type: 'leftArm' | 'rightArm',
   upRef: THREE.Vector3
 ) {
   const dUpper = new THREE.Vector3().subVectors(P2, P1).normalize();
   const dLower = new THREE.Vector3().subVectors(P3, P2).normalize();
 
-  if (type === 'leg') {
-    const axisY = dUpper.clone().negate();
-    const axisX = new THREE.Vector3().subVectors(
-      sideRef,
-      axisY.clone().multiplyScalar(sideRef.dot(axisY))
-    ).normalize();
-    const axisZ = new THREE.Vector3().crossVectors(axisX, axisY).normalize();
-    const upperWorldQ = makeOrthoBasis(axisX, axisY, axisZ);
-
-    const lowerY = dLower.clone().negate();
-    const lowerX = new THREE.Vector3().subVectors(
-      sideRef,
-      lowerY.clone().multiplyScalar(sideRef.dot(lowerY))
-    ).normalize();
-    const lowerZ = new THREE.Vector3().crossVectors(lowerX, lowerY).normalize();
-    const lowerWorldQ = makeOrthoBasis(lowerX, lowerY, lowerZ);
-
-    return { upperWorldQ, lowerWorldQ };
-  } else if (type === 'leftArm') {
+  if (type === 'leftArm') {
     const axisX = dUpper.clone();
     const axisY = new THREE.Vector3().subVectors(
       upRef,
@@ -69,6 +50,149 @@ function solveAnatomicalLimb(
 
     return { upperWorldQ, lowerWorldQ };
   }
+}
+
+function solveShoulderLocal(
+  pShoulder: THREE.Vector3,
+  pUpperArm: THREE.Vector3,
+  chestWorldQ: THREE.Quaternion,
+  isLeft: boolean,
+  restLm?: Record<string, [number, number, number]>
+): THREE.Quaternion {
+  const curDirWorld = new THREE.Vector3().subVectors(pUpperArm, pShoulder);
+  if (curDirWorld.lengthSq() < 1e-6) {
+    return new THREE.Quaternion(0, 0, 0, 1);
+  }
+  curDirWorld.normalize();
+
+  const chestInv = inv(chestWorldQ);
+  const curDirLocal = curDirWorld.clone().applyQuaternion(chestInv).normalize();
+
+  let restDirLocal = new THREE.Vector3(isLeft ? 1 : -1, 0, 0);
+  const shoulderKey = isLeft ? StandardBone.LeftShoulder : StandardBone.RightShoulder;
+  const armKey = isLeft ? StandardBone.LeftUpperArm : StandardBone.RightUpperArm;
+  if (restLm && hasBone(restLm, shoulderKey) && hasBone(restLm, armKey)) {
+    const rDiff = new THREE.Vector3().subVectors(getV(restLm, armKey), getV(restLm, shoulderKey));
+    if (rDiff.lengthSq() > 1e-6) {
+      restDirLocal = rDiff.normalize();
+    }
+  }
+
+  const deltaQ = new THREE.Quaternion().setFromUnitVectors(restDirLocal, curDirLocal);
+  // 适度阻尼 (85%) 避免锁骨过冲
+  return new THREE.Quaternion(0, 0, 0, 1).slerp(deltaQ, 0.85).normalize();
+}
+
+function computeFootBasis(
+  pKnee: THREE.Vector3,
+  pAnkle: THREE.Vector3,
+  pToes: THREE.Vector3,
+  fallbackSide: THREE.Vector3
+): THREE.Quaternion | null {
+  const dFoot = new THREE.Vector3().subVectors(pToes, pAnkle);
+  if (dFoot.lengthSq() < 1e-6) return null;
+  dFoot.normalize();
+
+  const shinUp = new THREE.Vector3().subVectors(pKnee, pAnkle);
+  if (shinUp.lengthSq() < 1e-6) {
+    shinUp.set(0, 1, 0);
+  } else {
+    shinUp.normalize();
+  }
+
+  let footSide = new THREE.Vector3().crossVectors(shinUp, dFoot);
+  if (footSide.lengthSq() < 1e-5) {
+    footSide = fallbackSide.clone().sub(dFoot.clone().multiplyScalar(fallbackSide.dot(dFoot)));
+  }
+  if (footSide.lengthSq() < 1e-5) return null;
+  footSide.normalize();
+
+  const footUp = new THREE.Vector3().crossVectors(dFoot, footSide).normalize();
+  return makeOrthoBasis(footSide, footUp, dFoot);
+}
+
+function solveLegAndFoot(
+  lm: Record<string, [number, number, number]>,
+  hipKey: StandardBoneKey,
+  kneeKey: StandardBoneKey,
+  ankleKey: StandardBoneKey,
+  toesKey: StandardBoneKey,
+  hipSideOrtho: THREE.Vector3,
+  restLm?: Record<string, [number, number, number]>
+) {
+  const pHip = getV(lm, hipKey);
+  const pKnee = getV(lm, kneeKey);
+  const pAnkle = getV(lm, ankleKey);
+
+  const dUpper = new THREE.Vector3().subVectors(pKnee, pHip);
+  if (dUpper.lengthSq() < 1e-6) dUpper.set(0, -1, 0);
+  else dUpper.normalize();
+
+  const dLower = new THREE.Vector3().subVectors(pAnkle, pKnee);
+  if (dLower.lengthSq() < 1e-6) dLower.set(0, -1, 0);
+  else dLower.normalize();
+
+  let footWorldQ: THREE.Quaternion | null = null;
+  let footSideRef = hipSideOrtho.clone();
+
+  if (hasBone(lm, toesKey)) {
+    const pToes = getV(lm, toesKey);
+    const rawFootQ = computeFootBasis(pKnee, pAnkle, pToes, hipSideOrtho);
+    if (rawFootQ) {
+      if (restLm && hasBone(restLm, toesKey) && hasBone(restLm, ankleKey) && hasBone(restLm, kneeKey)) {
+        const rKnee = getV(restLm, kneeKey);
+        const rAnkle = getV(restLm, ankleKey);
+        const rToes = getV(restLm, toesKey);
+        const restFootQ = computeFootBasis(rKnee, rAnkle, rToes, new THREE.Vector3(1, 0, 0));
+        if (restFootQ) {
+          footWorldQ = rawFootQ.clone().multiply(inv(restFootQ)).normalize();
+        } else {
+          footWorldQ = rawFootQ;
+        }
+      } else {
+        footWorldQ = rawFootQ;
+      }
+      footSideRef = new THREE.Vector3(1, 0, 0).applyQuaternion(footWorldQ).normalize();
+    }
+  }
+
+  const bendCross = new THREE.Vector3().crossVectors(dUpper, dLower);
+  const bendLen = bendCross.length();
+  const bendWeight = clamp((bendLen - 0.03) / 0.12, 0, 1);
+
+  let legSide = footSideRef.clone();
+  if (bendLen > 1e-4) {
+    const bendSide = bendCross.clone().divideScalar(bendLen);
+    if (bendSide.dot(footSideRef) >= -0.2) {
+      legSide.lerp(bendSide, bendWeight).normalize();
+    }
+  }
+
+  const upperY = dUpper.clone().negate();
+  let upperX = new THREE.Vector3().subVectors(
+    legSide,
+    upperY.clone().multiplyScalar(legSide.dot(upperY))
+  );
+  if (upperX.lengthSq() < 1e-6) upperX = hipSideOrtho.clone();
+  else upperX.normalize();
+  const upperZ = new THREE.Vector3().crossVectors(upperX, upperY).normalize();
+  const upperWorldQ = makeOrthoBasis(upperX, upperY, upperZ);
+
+  const lowerY = dLower.clone().negate();
+  let lowerX = new THREE.Vector3().subVectors(
+    legSide,
+    lowerY.clone().multiplyScalar(legSide.dot(lowerY))
+  );
+  if (lowerX.lengthSq() < 1e-6) lowerX = upperX.clone();
+  else lowerX.normalize();
+  const lowerZ = new THREE.Vector3().crossVectors(lowerX, lowerY).normalize();
+  const lowerWorldQ = makeOrthoBasis(lowerX, lowerY, lowerZ);
+
+  return {
+    upperWorldQ,
+    lowerWorldQ,
+    footWorldQ: footWorldQ || lowerWorldQ.clone(),
+  };
 }
 
 function solveHandWorldQ(
@@ -110,7 +234,8 @@ export function solveLimbs(
   spineWorldQ: THREE.Quaternion,
   hipsWorldQ: THREE.Quaternion,
   hipSideOrtho: THREE.Vector3,
-  chestUp: THREE.Vector3
+  chestUp: THREE.Vector3,
+  restLm?: Record<string, [number, number, number]>
 ) {
   const pUpperChest = getV(lm, StandardBone.Chest, getV(lm, StandardBone.Spine));
 
@@ -124,18 +249,34 @@ export function solveLimbs(
   const pRElbow = getV(lm, StandardBone.RightLowerArm);
   const pRWrist = getV(lm, StandardBone.RightHand);
 
-  const pLHip = getV(lm, StandardBone.LeftUpperLeg);
-  const pLKnee = getV(lm, StandardBone.LeftLowerLeg);
-  const pLAnkle = getV(lm, StandardBone.LeftFoot);
+  // 激活锁骨
+  const leftShoulderLocal = solveShoulderLocal(pLShoulder, pLArm, spineWorldQ, true, restLm);
+  const rightShoulderLocal = solveShoulderLocal(pRShoulder, pRArm, spineWorldQ, false, restLm);
 
-  const pRHip = getV(lm, StandardBone.RightUpperLeg);
-  const pRKnee = getV(lm, StandardBone.RightLowerLeg);
-  const pRAnkle = getV(lm, StandardBone.RightFoot);
+  const leftShoulderWorldQ = spineWorldQ.clone().multiply(leftShoulderLocal).normalize();
+  const rightShoulderWorldQ = spineWorldQ.clone().multiply(rightShoulderLocal).normalize();
 
-  const leftArm = solveAnatomicalLimb(pLArm, pLElbow, pLWrist, 'leftArm', hipSideOrtho, chestUp);
-  const rightArm = solveAnatomicalLimb(pRArm, pRElbow, pRWrist, 'rightArm', hipSideOrtho, chestUp);
-  const leftLeg = solveAnatomicalLimb(pLHip, pLKnee, pLAnkle, 'leg', hipSideOrtho, chestUp);
-  const rightLeg = solveAnatomicalLimb(pRHip, pRKnee, pRAnkle, 'leg', hipSideOrtho, chestUp);
+  const leftArm = solveAnatomicalLimb(pLArm, pLElbow, pLWrist, 'leftArm', chestUp);
+  const rightArm = solveAnatomicalLimb(pRArm, pRElbow, pRWrist, 'rightArm', chestUp);
+
+  const leftLeg = solveLegAndFoot(
+    lm,
+    StandardBone.LeftUpperLeg,
+    StandardBone.LeftLowerLeg,
+    StandardBone.LeftFoot,
+    StandardBone.LeftToes,
+    hipSideOrtho,
+    restLm
+  );
+  const rightLeg = solveLegAndFoot(
+    lm,
+    StandardBone.RightUpperLeg,
+    StandardBone.RightLowerLeg,
+    StandardBone.RightFoot,
+    StandardBone.RightToes,
+    hipSideOrtho,
+    restLm
+  );
 
   const pLIndex1 = getV(lm, StandardBone.LeftIndex1, pLWrist);
   const pLPinky1 = getV(lm, StandardBone.LeftLittle1, pLWrist);
@@ -147,31 +288,30 @@ export function solveLimbs(
   const pRMiddle1 = getV(lm, StandardBone.RightMiddle1, pRWrist);
   const rightHandWorldQ = solveHandWorldQ(pRWrist, pRIndex1, pRPinky1, pRMiddle1, false, rightArm.lowerWorldQ);
 
-  const sInv = inv(spineWorldQ);
   const hInv = inv(hipsWorldQ);
 
   return {
     leftHandWorldQ,
     rightHandWorldQ,
     localRotations: {
-      leftShoulder: new THREE.Quaternion(0, 0, 0, 1),
-      leftUpperArm: mul(sInv, leftArm.upperWorldQ),
+      leftShoulder: leftShoulderLocal,
+      leftUpperArm: mul(inv(leftShoulderWorldQ), leftArm.upperWorldQ),
       leftLowerArm: mul(inv(leftArm.upperWorldQ), leftArm.lowerWorldQ),
       leftHand: mul(inv(leftArm.lowerWorldQ), leftHandWorldQ),
 
-      rightShoulder: new THREE.Quaternion(0, 0, 0, 1),
-      rightUpperArm: mul(sInv, rightArm.upperWorldQ),
+      rightShoulder: rightShoulderLocal,
+      rightUpperArm: mul(inv(rightShoulderWorldQ), rightArm.upperWorldQ),
       rightLowerArm: mul(inv(rightArm.upperWorldQ), rightArm.lowerWorldQ),
       rightHand: mul(inv(rightArm.lowerWorldQ), rightHandWorldQ),
 
       leftUpperLeg: mul(hInv, leftLeg.upperWorldQ),
       leftLowerLeg: mul(inv(leftLeg.upperWorldQ), leftLeg.lowerWorldQ),
-      leftFoot: new THREE.Quaternion(0, 0, 0, 1),
+      leftFoot: mul(inv(leftLeg.lowerWorldQ), leftLeg.footWorldQ),
       leftToes: new THREE.Quaternion(0, 0, 0, 1),
 
       rightUpperLeg: mul(hInv, rightLeg.upperWorldQ),
       rightLowerLeg: mul(inv(rightLeg.upperWorldQ), rightLeg.lowerWorldQ),
-      rightFoot: new THREE.Quaternion(0, 0, 0, 1),
+      rightFoot: mul(inv(rightLeg.lowerWorldQ), rightLeg.footWorldQ),
       rightToes: new THREE.Quaternion(0, 0, 0, 1),
     },
   };

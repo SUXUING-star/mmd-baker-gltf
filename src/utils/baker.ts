@@ -181,12 +181,26 @@ export async function bakePure3DLandmarks(
     const availableMorphs = extractModelMorphs(mesh);
     const activeMorphs = resolveAnimatedMorphs(mesh, animation);
 
+    const worldPos = new THREE.Vector3();
+    // 采样模型静止 Rest Pose 坐标
+    mesh.updateMatrixWorld(true);
+    const restLandmarks: Record<string, [number, number, number]> = {};
+    standardBoneMap.forEach((bone, stdName) => {
+      bone.getWorldPosition(worldPos);
+      const posArr: [number, number, number] = [
+        Number(worldPos.x.toFixed(4)),
+        Number(worldPos.y.toFixed(4)),
+        Number(worldPos.z.toFixed(4)),
+      ];
+      restLandmarks[stdName] = posArr;
+      restLandmarks[bone.name] = posArr;
+    });
+
     const fps = 30;
     const dt = 1.0 / fps;
     const totalDuration = animation.duration;
     const totalFrames = Math.ceil(totalDuration * fps);
     const bakedFrames: LandmarkFrame[] = [];
-    const worldPos = new THREE.Vector3();
 
     for (let f = 0; f < totalFrames; f++) {
       helper.update(dt);
@@ -250,6 +264,7 @@ export async function bakePure3DLandmarks(
         totalFrames,
         duration: totalDuration,
         frames: bakedFrames,
+        restLandmarks,
         availableMorphs,
       },
       mesh,
