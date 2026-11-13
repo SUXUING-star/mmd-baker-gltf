@@ -18,7 +18,7 @@ const BASE = import.meta.env.BASE_URL.endsWith('/')
   : `${import.meta.env.BASE_URL}/`;
 
 const DEFAULT_PMX_PATH = `${BASE}ganyu_by_原神/甘雨.pmx`;
-const DEFAULT_VMD_PATH = `${BASE}奶蛙上掌下拳.vmd`;
+const DEFAULT_VMD_PATH = `${BASE}motion.vmd`;
 
 export default function App() {
   const [lang, setLang] = useState<Lang>(detectInitialLanguage);

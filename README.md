@@ -47,5 +47,4 @@ npm run dev
 
 Demo assets sourced from Aplaybox:
 
-- Model: [Ganyu](https://www.aplaybox.com/details/model/xfyv7yIWHaxH) by 原神
-- Motion: [奶蛙上掌下拳](https://www.aplaybox.com/details/motion/77uat05QX3I2)
+- Model: [Ganyu](https://www.aplaybox.com/details/model/xfyv7yIWHaxH)
