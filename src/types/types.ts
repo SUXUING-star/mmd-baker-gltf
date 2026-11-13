@@ -1,4 +1,4 @@
-// src/types.ts
+// src/types/types.ts
 
 // 需录制 3D 点云的 MMD 节点清单 (包含双手 15 节指骨点)
 export const MMD_POINT_NAMES = [
@@ -42,9 +42,17 @@ export const HUMANOID_BONES = [
 
 export type HumanoidBoneName = typeof HUMANOID_BONES[number];
 
+export interface ModelMorphInfo {
+  rawName: string;
+  targetKey: string;
+  isPreset: boolean;
+}
+
 export interface LandmarkFrame {
   time: number;
   landmarks: Record<string, [number, number, number]>;
+  /** 本帧表情权重 (0~1)，键为 VRM 1.0 预设名 (aa/blink/happy...) 或自定义 Morph 名 */
+  expressions?: Record<string, number>;
 }
 
 export interface LandmarkData {
@@ -52,4 +60,6 @@ export interface LandmarkData {
   totalFrames: number;
   duration: number;
   frames: LandmarkFrame[];
+  /** 当前 PMX 模型自身携带的全部表情 Morph 信息 */
+  availableMorphs?: ModelMorphInfo[];
 }

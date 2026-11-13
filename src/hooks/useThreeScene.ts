@@ -1,7 +1,15 @@
 // src/hooks/useThreeScene.ts
 import { useCallback, useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import { MMDAnimationHelper } from 'three/examples/jsm/animation/MMDAnimationHelper.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { resolveExpressionTarget } from '../types/expressionMapping';
+
+interface BoneRestTransform {
+  pos: THREE.Vector3;
+  quat: THREE.Quaternion;
+  scale: THREE.Vector3;
+}
 
 export function useThreeScene(containerRef: React.RefObject<HTMLDivElement | null>) {
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -9,7 +17,8 @@ export function useThreeScene(containerRef: React.RefObject<HTMLDivElement | nul
   const controlsRef = useRef<OrbitControls | null>(null);
   const pointsGroupRef = useRef<THREE.Group | null>(null);
   const currentMeshRef = useRef<THREE.Object3D | null>(null);
-  const mixerRef = useRef<THREE.AnimationMixer | null>(null);
+  const mmdHelperRef = useRef<MMDAnimationHelper | null>(null);
+  const restBonesRef = useRef<BoneRestTransform[]>([]);
 
   const sphereGeoRef = useRef<THREE.SphereGeometry>(new THREE.SphereGeometry(0.12, 8, 8));
   const pointMatRef = useRef<THREE.MeshBasicMaterial>(new THREE.MeshBasicMaterial({ color: 0xff0055, depthTest: false }));
@@ -57,14 +66,9 @@ export function useThreeScene(containerRef: React.RefObject<HTMLDivElement | nul
     scene.add(pointsGroup);
     pointsGroupRef.current = pointsGroup;
 
-    const clock = new THREE.Clock();
     let animId: number;
     const renderLoop = () => {
       animId = requestAnimationFrame(renderLoop);
-      const delta = clock.getDelta();
-      if (mixerRef.current && mixerRef.current.timeScale !== 0) {
-        mixerRef.current.update(delta);
-      }
       renderer.render(scene, camera);
     };
     renderLoop();
@@ -93,13 +97,19 @@ export function useThreeScene(containerRef: React.RefObject<HTMLDivElement | nul
   const clearCurrentMesh = useCallback(() => {
     const scene = sceneRef.current;
     if (!scene) return;
+
+    if (mmdHelperRef.current && currentMeshRef.current && (currentMeshRef.current as THREE.SkinnedMesh).isSkinnedMesh) {
+      const skinned = currentMeshRef.current as THREE.SkinnedMesh;
+      if (mmdHelperRef.current.objects.has(skinned)) {
+        mmdHelperRef.current.remove(skinned);
+      }
+    }
+    mmdHelperRef.current = null;
+    restBonesRef.current = [];
+
     if (currentMeshRef.current) {
       scene.remove(currentMeshRef.current);
       currentMeshRef.current = null;
-    }
-    if (mixerRef.current) {
-      mixerRef.current.stopAllAction();
-      mixerRef.current = null;
     }
     clearPoints();
   }, [clearPoints]);
@@ -113,11 +123,15 @@ export function useThreeScene(containerRef: React.RefObject<HTMLDivElement | nul
       scene.add(mesh);
       currentMeshRef.current = mesh;
 
-      const mixer = new THREE.AnimationMixer(mesh);
-      const action = mixer.clipAction(animation);
-      action.play();
-      mixer.timeScale = 0;
-      mixerRef.current = mixer;
+      restBonesRef.current = mesh.skeleton.bones.map((b) => ({
+        pos: b.position.clone(),
+        quat: b.quaternion.clone(),
+        scale: b.scale.clone(),
+      }));
+
+      const helper = new MMDAnimationHelper({ afterglow: 0, resetPhysicsOnLoop: false });
+      helper.add(mesh, { animation, physics: false, warmup: 0 });
+      mmdHelperRef.current = helper;
     },
     [clearCurrentMesh]
   );
@@ -140,42 +154,67 @@ export function useThreeScene(containerRef: React.RefObject<HTMLDivElement | nul
     });
   }, []);
 
-  // 关键增强：支持首尾动作平滑过渡预览
   const setMmdTime = useCallback(
     (
       time: number,
       landmarks?: Record<string, [number, number, number]>,
-      blendTarget?: { startTime: number; weight: number }
+      blendTarget?: { startTime: number; weight: number },
+      expressionsOverride?: Record<string, number>
     ) => {
-      if (mixerRef.current && currentMeshRef.current) {
+      const curMesh = currentMeshRef.current as THREE.SkinnedMesh | null;
+      const helper = mmdHelperRef.current;
+      const entry = curMesh && helper ? helper.objects.get(curMesh) : undefined;
+
+      if (curMesh && entry?.mixer) {
+        const evaluatePoseAt = (t: number) => {
+          restBonesRef.current.forEach((rest, idx) => {
+            const bone = curMesh.skeleton.bones[idx];
+            if (bone) {
+              bone.position.copy(rest.pos);
+              bone.quaternion.copy(rest.quat);
+              bone.scale.copy(rest.scale);
+            }
+          });
+          entry.mixer!.setTime(t);
+          entry.ikSolver?.update();
+          entry.grantSolver?.update();
+          curMesh.updateMatrixWorld(true);
+        };
+
         if (blendTarget && blendTarget.weight > 0) {
           const w = blendTarget.weight;
-          const curMesh = currentMeshRef.current as THREE.SkinnedMesh;
-
-          // 1. 采样当前帧姿态
-          mixerRef.current.setTime(time);
-          currentMeshRef.current.updateMatrixWorld(true);
+          evaluatePoseAt(time);
 
           if (curMesh.skeleton && curMesh.skeleton.bones.length > 0) {
             const curQuats = curMesh.skeleton.bones.map((b) => b.quaternion.clone());
             const curPositions = curMesh.skeleton.bones.map((b) => b.position.clone());
 
-            // 2. 采样首帧姿态
-            mixerRef.current.setTime(blendTarget.startTime);
-            currentMeshRef.current.updateMatrixWorld(true);
+            evaluatePoseAt(blendTarget.startTime);
 
-            // 3. Slerp / Lerp 混合
             curMesh.skeleton.bones.forEach((bone, idx) => {
               const targetQ = bone.quaternion.clone();
               const targetP = bone.position.clone();
               bone.quaternion.copy(curQuats[idx]).slerp(targetQ, w);
               bone.position.copy(curPositions[idx]).lerp(targetP, w);
             });
-            currentMeshRef.current.updateMatrixWorld(true);
+            curMesh.updateMatrixWorld(true);
           }
         } else {
-          mixerRef.current.setTime(time);
-          currentMeshRef.current.updateMatrixWorld(true);
+          evaluatePoseAt(time);
+        }
+
+        // 将手调表情轨实时同步到 3D 模型面部 Morph 预览
+        if (expressionsOverride && curMesh.morphTargetDictionary && curMesh.morphTargetInfluences) {
+          const dict = curMesh.morphTargetDictionary;
+          const influences = curMesh.morphTargetInfluences;
+          for (const [rawName, index] of Object.entries(dict)) {
+            const { key } = resolveExpressionTarget(rawName);
+            if (Object.prototype.hasOwnProperty.call(expressionsOverride, rawName)) {
+              influences[index] = Math.max(0, Math.min(1, expressionsOverride[rawName]));
+            } else if (Object.prototype.hasOwnProperty.call(expressionsOverride, key)) {
+              influences[index] = Math.max(0, Math.min(1, expressionsOverride[key]));
+            }
+          }
         }
       }
 

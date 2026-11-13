@@ -3,9 +3,11 @@ import { useMemo, useRef, useState } from 'react';
 import { ClipSection } from './components/ClipSection';
 import { DownloadSection } from './components/DownloadSection';
 import { DropZoneSection } from './components/DropZoneSection';
+import { ExpressionTrackSection } from './components/ExpressionTrackSection';
 import { LoopTransitionSection } from './components/LoopTransitionSection';
 import { MetadataSection } from './components/MetadataSection';
 import { ThreeCanvas } from './components/ThreeCanvas';
+import { useExpressionTracks } from './hooks/useExpressionTracks';
 import { useLoopOptions } from './hooks/useLoopOptions';
 import { useMmdPipeline } from './hooks/useMmdPipeline';
 import { useThreeScene } from './hooks/useThreeScene';
@@ -27,7 +29,15 @@ export default function App() {
   const threeBridge = useThreeScene(canvasContainerRef);
 
   const loopState = useLoopOptions();
-  const pipeline = useMmdPipeline(threeBridge, DEFAULT_PMX_PATH, DEFAULT_VMD_PATH, lang, loopState.loopOptions);
+  const exprState = useExpressionTracks();
+  const pipeline = useMmdPipeline(
+    threeBridge,
+    DEFAULT_PMX_PATH,
+    DEFAULT_VMD_PATH,
+    lang,
+    loopState.loopOptions,
+    exprState.tracks
+  );
   const meta = useVrmaMetadata();
 
   const isBaked = pipeline.timeline.maxFrames > 0;
@@ -72,7 +82,7 @@ export default function App() {
         {/* 2. 时间轴剪辑控制器 */}
         <ClipSection t={t} timeline={pipeline.timeline} disabled={pipeline.processing} />
 
-        {/* 3. 动作循环衔接面板（配置生效时通过 onApply 通知 pipeline 刷新 3D 渲染） */}
+        {/* 3. 动作循环衔接面板 */}
         <LoopTransitionSection
           t={t}
           loopState={loopState}
@@ -81,13 +91,23 @@ export default function App() {
           onApply={(opts) => pipeline.applyLoopAndRefresh(opts)}
         />
 
-        {/* 4. 模型与动作文件投递区 */}
+        {/* 4. 手调表情轨道编辑器 */}
+        <ExpressionTrackSection
+          t={t}
+          exprState={exprState}
+          timeline={pipeline.timeline}
+          availableMorphs={pipeline.availableMorphs}
+          isBaked={isBaked}
+          disabled={pipeline.processing}
+        />
+
+        {/* 5. 模型与动作文件投递区 */}
         <DropZoneSection t={t} pipeline={pipeline} />
 
-        {/* 5. VRMA Metadata 表单 */}
+        {/* 6. VRMA Metadata 表单 */}
         <MetadataSection t={t} meta={meta} disabled={pipeline.processing} />
 
-        {/* 6. 核心烘焙控制与下载面板 */}
+        {/* 7. 核心烘焙控制与下载面板 */}
         <DownloadSection t={t} pipeline={pipeline} meta={meta} />
 
       </div>

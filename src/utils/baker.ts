@@ -3,10 +3,16 @@ import * as THREE from 'three';
 import { MMDAnimationHelper } from 'three/examples/jsm/animation/MMDAnimationHelper.js';
 import { MMDLoader } from 'three/examples/jsm/loaders/MMDLoader.js';
 import { resolveModelBones } from '../types/boneMapping';
-import { LandmarkData, LandmarkFrame } from '../types/types';
+import { resolveExpressionTarget } from '../types/expressionMapping';
+import { LandmarkData, LandmarkFrame, ModelMorphInfo } from '../types/types';
 
 export interface BakerRenderCallback {
-  (mesh: THREE.SkinnedMesh, landmarks: Record<string, [number, number, number]>, progress: number): void;
+  (
+    mesh: THREE.SkinnedMesh,
+    landmarks: Record<string, [number, number, number]>,
+    progress: number,
+    expressions?: Record<string, number>
+  ): void;
 }
 
 export interface BakerResult {
@@ -15,8 +21,49 @@ export interface BakerResult {
   animation: THREE.AnimationClip;
 }
 
+interface ActiveMorphBinding {
+  index: number;
+  targetKey: string;
+}
+
 const BLANK_TEXTURE_DATA_URL =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+
+/** 提取模型自身全部可用的 Morph 列表（按 PMX 定义顺序） */
+function extractModelMorphs(mesh: THREE.SkinnedMesh): ModelMorphInfo[] {
+  const dict = mesh.morphTargetDictionary;
+  if (!dict) return [];
+
+  return Object.entries(dict)
+    .sort((a, b) => a[1] - b[1])
+    .map(([rawName]) => {
+      const { key, isPreset } = resolveExpressionTarget(rawName);
+      return { rawName, targetKey: key, isPreset };
+    });
+}
+
+/** 提取 VMD 动画中实际存在关键帧的表情 Morph 绑定 */
+function resolveAnimatedMorphs(mesh: THREE.SkinnedMesh, animation: THREE.AnimationClip): ActiveMorphBinding[] {
+  const dict = mesh.morphTargetDictionary;
+  if (!dict) return [];
+
+  const animatedIndices = new Set<number>();
+  for (const track of animation.tracks) {
+    const match = track.name.match(/morphTargetInfluences\[(\d+)\]/);
+    if (match) {
+      animatedIndices.add(Number(match[1]));
+    }
+  }
+
+  const bindings: ActiveMorphBinding[] = [];
+  for (const [morphName, index] of Object.entries(dict)) {
+    if (!animatedIndices.has(index)) continue;
+    const { key } = resolveExpressionTarget(morphName);
+    bindings.push({ index, targetKey: key });
+  }
+
+  return bindings;
+}
 
 export async function bakePure3DLandmarks(
   pmxInput: File | string,
@@ -66,12 +113,16 @@ export async function bakePure3DLandmarks(
   }
 
   manager.setURLModifier((url: string) => {
-    if (url.includes('#model.pmx') || url.includes('#motion.vmd')) {
+    if (url.includes('#model.pmx') || url.includes('#motion.vmd') || url.startsWith('data:')) {
       return url;
     }
 
+    if (!url.startsWith('blob:')) {
+      return url.replace(/\\/g, '/');
+    }
+
     const cleanUrl = decodeURIComponent(url).replace(/\\/g, '/');
-    const pathname = cleanUrl.replace(/^blob:https?:\/\/[^/]+\//i, '');
+    const pathname = cleanUrl.replace(/^blob:https?:\/\/[^/]+\//i, '').replace(/^\.\//, '');
     const filename = pathname.split('/').pop()?.toLowerCase() || '';
     const lowerPath = pathname.toLowerCase();
 
@@ -117,11 +168,18 @@ export async function bakePure3DLandmarks(
       );
     });
 
+    const initialBonePose = mesh.skeleton.bones.map((b) => ({
+      pos: b.position.clone(),
+      quat: b.quaternion.clone(),
+      scale: b.scale.clone(),
+    }));
+
     const helper = new MMDAnimationHelper({ afterglow: 0, resetPhysicsOnLoop: false });
     helper.add(mesh, { animation: animation, physics: false, warmup: 0 });
 
-    // 关键修正：将整棵 Object3D 节点树 `mesh` 传入，深度搜刮多层/两层嵌套下的所有骨骼
     const standardBoneMap = resolveModelBones(mesh);
+    const availableMorphs = extractModelMorphs(mesh);
+    const activeMorphs = resolveAnimatedMorphs(mesh, animation);
 
     const fps = 30;
     const dt = 1.0 / fps;
@@ -135,38 +193,67 @@ export async function bakePure3DLandmarks(
       mesh.updateMatrixWorld(true);
 
       const landmarks: Record<string, [number, number, number]> = {};
-
       standardBoneMap.forEach((bone, stdName) => {
         bone.getWorldPosition(worldPos);
         const posArr: [number, number, number] = [
           Number(worldPos.x.toFixed(4)),
           Number(worldPos.y.toFixed(4)),
-          Number(worldPos.z.toFixed(4))
+          Number(worldPos.z.toFixed(4)),
         ];
         landmarks[stdName] = posArr;
         landmarks[bone.name] = posArr;
       });
 
+      const expressions: Record<string, number> = {};
+      const influences = mesh.morphTargetInfluences;
+      if (influences && activeMorphs.length > 0) {
+        for (const { index, targetKey } of activeMorphs) {
+          const rawWeight = influences[index] ?? 0;
+          const clamped = Math.max(0, Math.min(1, rawWeight));
+          const prev = expressions[targetKey] ?? 0;
+          expressions[targetKey] = Number(Math.min(1, prev + clamped).toFixed(4));
+        }
+      }
+
       bakedFrames.push({
         time: Number((f * dt).toFixed(3)),
-        landmarks
+        landmarks,
+        ...(activeMorphs.length > 0 ? { expressions } : {}),
       });
 
       if (onFrameRender) {
-        onFrameRender(mesh, landmarks, Math.round((f / totalFrames) * 100));
+        onFrameRender(
+          mesh,
+          landmarks,
+          Math.round((f / totalFrames) * 100),
+          activeMorphs.length > 0 ? expressions : undefined
+        );
         await new Promise((r) => setTimeout(r, 16));
       }
     }
+
+    helper.remove(mesh);
+    initialBonePose.forEach((rest, idx) => {
+      const b = mesh.skeleton.bones[idx];
+      b.position.copy(rest.pos);
+      b.quaternion.copy(rest.quat);
+      b.scale.copy(rest.scale);
+    });
+    if (mesh.morphTargetInfluences) {
+      mesh.morphTargetInfluences.fill(0);
+    }
+    mesh.updateMatrixWorld(true);
 
     return {
       landmarkData: {
         fps,
         totalFrames,
         duration: totalDuration,
-        frames: bakedFrames
+        frames: bakedFrames,
+        availableMorphs,
       },
       mesh,
-      animation
+      animation,
     };
   } finally {
     if (isPmxBlob) URL.revokeObjectURL(pmxUrl.split('#')[0]);

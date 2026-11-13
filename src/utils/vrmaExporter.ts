@@ -3,7 +3,8 @@ import type { VRMCVRMAnimation } from '@pixiv/types-vrmc-vrm-animation-1.0';
 import * as THREE from 'three';
 import { HUMANOID_BONES, LandmarkData } from '../types/types';
 import {
-    buildHumanoidAnimationClip,
+    buildHumanoidAnimationClipWithTimes,
+    buildVrmaExpressionTracks,
     createHumanoidBoneHierarchy,
     exportSceneToBinaryGltf,
 } from './humanoidExportBase';
@@ -18,7 +19,7 @@ export interface VrmaMetaOptions {
 }
 
 /**
- * 导出符合 Pixiv 官方 VRMC_vrm_animation 1.0 规范的纯动作文件 (.vrma)
+ * 导出符合 Pixiv 官方 VRMC_vrm_animation 1.0 规范的纯动作文件 (.vrma，含骨骼 + 表情)
  */
 export async function exportFull52VRMA(
   json: LandmarkData,
@@ -29,7 +30,13 @@ export async function exportFull52VRMA(
   const bones = createHumanoidBoneHierarchy();
   scene.add(bones.hips);
 
-  const clip = buildHumanoidAnimationClip(json, 'VRMAnimation', loopOptions);
+  const { clip, times } = buildHumanoidAnimationClipWithTimes(json, 'VRMAnimation', loopOptions);
+  const { bindings: exprBindings, tracks: exprTracks } = buildVrmaExpressionTracks(json, times, loopOptions);
+
+  exprBindings.forEach((b) => scene.add(b.node));
+  if (exprTracks.length > 0) {
+    clip.tracks.push(...exprTracks);
+  }
 
   return exportSceneToBinaryGltf(scene, clip, (exporter) => {
     exporter.register((writer: any) => ({
@@ -44,11 +51,34 @@ export async function exportFull52VRMA(
           }
         });
 
+        const presetExpressions: Record<string, { node: number }> = {};
+        const customExpressions: Record<string, { node: number }> = {};
+        exprBindings.forEach(({ node, expressionName, isPreset }) => {
+          const nodeIndex = writer.nodeMap.get(node);
+          if (nodeIndex === undefined) return;
+          if (isPreset) {
+            presetExpressions[expressionName] = { node: nodeIndex };
+          } else {
+            customExpressions[expressionName] = { node: nodeIndex };
+          }
+        });
+
+        const hasPreset = Object.keys(presetExpressions).length > 0;
+        const hasCustom = Object.keys(customExpressions).length > 0;
+
         const vrmcAnimation: VRMCVRMAnimation = {
           specVersion: '1.0',
           humanoid: {
             humanBones: humanBones as any,
           },
+          ...(hasPreset || hasCustom
+            ? {
+                expressions: {
+                  ...(hasPreset ? { preset: presetExpressions as any } : {}),
+                  ...(hasCustom ? { custom: customExpressions } : {}),
+                },
+              }
+            : {}),
         };
 
         const gltfJson = writer.json;
