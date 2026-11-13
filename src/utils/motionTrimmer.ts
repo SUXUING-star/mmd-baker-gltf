@@ -80,19 +80,19 @@ export function trimLandmarkData(
   const slicedFrames = landmarkData.frames.slice(safeStart, safeEnd + 1);
   const baseTime = slicedFrames[0]?.time ?? 0;
 
-  // 将裁剪后的帧时间归零重置
-  const normalizedFrames: LandmarkFrame[] = slicedFrames.map((f) => ({
-    time: Number((f.time - baseTime).toFixed(3)),
-    landmarks: f.landmarks,
-  }));
+  // 将裁剪后的帧时间归零重置，同时保留 expressions 等帧数据
+    const normalizedFrames: LandmarkFrame[] = slicedFrames.map((f) => ({
+      ...f,
+      time: Number((f.time - baseTime).toFixed(3)),
+    }));
 
-  const totalFrames = normalizedFrames.length;
-  const duration = totalFrames > 0 ? normalizedFrames[totalFrames - 1].time : 0;
+    const totalFrames = normalizedFrames.length;
+    const duration = totalFrames > 0 ? normalizedFrames[totalFrames - 1].time : 0;
 
-  return {
-    fps: landmarkData.fps,
-    totalFrames,
-    duration,
-    frames: normalizedFrames,
-  };
+    return {
+      ...landmarkData,
+      totalFrames,
+      duration,
+      frames: normalizedFrames,
+    };
 }

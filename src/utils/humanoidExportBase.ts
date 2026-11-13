@@ -157,29 +157,30 @@ export function buildHumanoidAnimationClip(
 /**
  * 为存在有效动画的表情创建 VRMA 节点与 position.x 权重轨道
  */
-export function buildVrmaExpressionTracks(
-  json: LandmarkData,
-  times: number[],
-  loopOptions: LoopBlendOptions = DEFAULT_LOOP_OPTIONS
-): {
-  bindings: ExpressionNodeBinding[];
-  tracks: THREE.KeyframeTrack[];
-} {
-  const frames = json.frames;
-  if (!frames.length || times.length !== frames.length) {
-    return { bindings: [], tracks: [] };
-  }
+ export function buildVrmaExpressionTracks(
+   json: LandmarkData,
+   times: number[],
+   loopOptions: LoopBlendOptions = DEFAULT_LOOP_OPTIONS,
+   presetOnly: boolean = true
+ ): {
+   bindings: ExpressionNodeBinding[];
+   tracks: THREE.KeyframeTrack[];
+ } {
+   const frames = json.frames;
+   if (!frames.length || times.length !== frames.length) {
+     return { bindings: [], tracks: [] };
+   }
 
-  // 统计真正出现过非零权重的表情，过滤全程为 0 的无效表情
-  const activeNames = new Set<string>();
-  for (const frame of frames) {
-    if (!frame.expressions) continue;
-    for (const [name, weight] of Object.entries(frame.expressions)) {
-      if (weight > 1e-4) {
-        activeNames.add(name);
-      }
-    }
-  }
+   // 只收集有非零权重的表情（默认只导出 VRM 标准 preset）
+   const activeNames = new Set<string>();
+   for (const frame of frames) {
+     if (!frame.expressions) continue;
+     for (const [name, weight] of Object.entries(frame.expressions)) {
+       if (weight > 1e-4 && (!presetOnly || isPresetExpression(name))) {
+         activeNames.add(name);
+       }
+     }
+   }
 
   const bindings: ExpressionNodeBinding[] = [];
   const tracks: THREE.KeyframeTrack[] = [];

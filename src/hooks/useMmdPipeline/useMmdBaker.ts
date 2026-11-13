@@ -1,6 +1,11 @@
+// src/hooks/useMmdPipeline/useMmdBaker.ts
 import { useCallback, useRef, useState } from 'react';
 import { LandmarkData, ModelMorphInfo } from '../../types/types';
 import { bakePure3DLandmarks, BakerResult } from '../../utils/baker';
+import {
+    analyzeVmdExpressions,
+    VmdExpressionTrackSummary,
+} from '../../utils/vmdExpressionAnalyzer';
 
 export interface BakerThreeBridge {
   setMmdCamera: () => void;
@@ -12,6 +17,7 @@ export interface BakerThreeBridge {
 export function useMmdBaker(threeBridge: BakerThreeBridge) {
   const rawLandmarkDataRef = useRef<LandmarkData | null>(null);
   const [availableMorphs, setAvailableMorphs] = useState<ModelMorphInfo[]>([]);
+  const [vmdExpressionTracks, setVmdExpressionTracks] = useState<VmdExpressionTrackSummary[]>([]);
   const [progress, setProgress] = useState<number>(0);
   const [processing, setProcessing] = useState<boolean>(false);
 
@@ -25,6 +31,7 @@ export function useMmdBaker(threeBridge: BakerThreeBridge) {
         setProcessing(true);
         setProgress(0);
         setAvailableMorphs([]);
+        setVmdExpressionTracks([]);
 
         threeBridge.setMmdCamera();
         threeBridge.clearCurrentMesh();
@@ -41,6 +48,7 @@ export function useMmdBaker(threeBridge: BakerThreeBridge) {
 
         rawLandmarkDataRef.current = result.landmarkData;
         setAvailableMorphs(result.landmarkData.availableMorphs || []);
+        setVmdExpressionTracks(analyzeVmdExpressions(result.landmarkData));
         threeBridge.setupMmdAnimation(result.mesh, result.animation);
 
         return result;
@@ -51,9 +59,15 @@ export function useMmdBaker(threeBridge: BakerThreeBridge) {
     [threeBridge]
   );
 
+  const getFrameVmdExpressions = useCallback((frame: number): Record<string, number> => {
+    return rawLandmarkDataRef.current?.frames[frame]?.expressions || {};
+  }, []);
+
   return {
     rawLandmarkDataRef,
     availableMorphs,
+    vmdExpressionTracks,
+    getFrameVmdExpressions,
     progress,
     processing,
     bake,

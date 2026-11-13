@@ -3,14 +3,15 @@ import { I18N, Lang } from '../../i18n';
 import { ModelMorphInfo } from '../../types/types';
 import { ExpressionTrack } from '../../utils/expressionTrackEvaluator';
 import { DEFAULT_LOOP_OPTIONS, LoopBlendOptions } from '../../utils/loopBlender';
+import { VmdExpressionTrackSummary } from '../../utils/vmdExpressionAnalyzer';
 import { VrmaMetaOptions } from '../../utils/vrmaExporter';
 import { BakerThreeBridge, useMmdBaker } from './useMmdBaker';
 import { useMmdFiles } from './useMmdFiles';
 import { useMotionExporter } from './useMotionExporter';
 import {
-    TimelineController,
-    TimelineThreeBridge,
-    useTimelinePlayback,
+  TimelineController,
+  TimelineThreeBridge,
+  useTimelinePlayback,
 } from './useTimelinePlayback';
 
 export type StatusType = 'ready' | 'analyzing' | 'ready_to_export' | 'exporting' | 'error';
@@ -37,6 +38,8 @@ export interface MmdPipeline {
   downloadGlb: () => Promise<void>;
   downloadBoth: (metaOptions?: VrmaMetaOptions) => Promise<void>;
   applyLoopAndRefresh: (newOptions?: LoopBlendOptions) => void;
+  vmdExpressionTracks: VmdExpressionTrackSummary[];
+  getFrameVmdExpressions: (frame: number) => Record<string, number>;
 }
 
 export interface ThreeBridge extends BakerThreeBridge, TimelineThreeBridge {
@@ -137,5 +140,7 @@ export function useMmdPipeline(
     downloadGlb: exporter.downloadGlb,
     downloadBoth: exporter.downloadBoth,
     applyLoopAndRefresh: playback.applyLoopAndRefresh,
+    vmdExpressionTracks: baker.vmdExpressionTracks,
+    getFrameVmdExpressions: baker.getFrameVmdExpressions,
   };
 }

@@ -3,10 +3,10 @@ import type { VRMCVRMAnimation } from '@pixiv/types-vrmc-vrm-animation-1.0';
 import * as THREE from 'three';
 import { HUMANOID_BONES, LandmarkData } from '../types/types';
 import {
-    buildHumanoidAnimationClipWithTimes,
-    buildVrmaExpressionTracks,
-    createHumanoidBoneHierarchy,
-    exportSceneToBinaryGltf,
+  buildHumanoidAnimationClipWithTimes,
+  buildVrmaExpressionTracks,
+  createHumanoidBoneHierarchy,
+  exportSceneToBinaryGltf,
 } from './humanoidExportBase';
 import { DEFAULT_LOOP_OPTIONS, LoopBlendOptions } from './loopBlender';
 
@@ -99,6 +99,8 @@ export async function exportFull52VRMA(
         if (!gltfJson.extensionsUsed.includes('VRMC_vrm_animation')) {
           gltfJson.extensionsUsed.push('VRMC_vrm_animation');
         }
+
+
       },
     }));
   });

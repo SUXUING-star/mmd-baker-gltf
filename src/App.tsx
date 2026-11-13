@@ -3,7 +3,6 @@ import { useMemo, useRef, useState } from 'react';
 import { ClipSection } from './components/ClipSection';
 import { DownloadSection } from './components/DownloadSection';
 import { DropZoneSection } from './components/DropZoneSection';
-import { ExpressionTrackSection } from './components/ExpressionTrackSection';
 import { LoopTransitionSection } from './components/LoopTransitionSection';
 import { MetadataSection } from './components/MetadataSection';
 import { ThreeCanvas } from './components/ThreeCanvas';
@@ -79,8 +78,16 @@ export default function App() {
         {/* 1. 3D 预览视口 */}
         <ThreeCanvas containerRef={canvasContainerRef} />
 
-        {/* 2. 时间轴剪辑控制器 */}
-        <ClipSection t={t} timeline={pipeline.timeline} disabled={pipeline.processing} />
+        {/* 2. 统一 PR 时间轴与表情编辑器 */}
+        <ClipSection
+          t={t}
+          timeline={pipeline.timeline}
+          exprState={exprState}
+          availableMorphs={pipeline.availableMorphs}
+          vmdExpressionTracks={pipeline.vmdExpressionTracks}
+          getFrameVmdExpressions={pipeline.getFrameVmdExpressions}
+          disabled={pipeline.processing}
+        />
 
         {/* 3. 动作循环衔接面板 */}
         <LoopTransitionSection
@@ -91,15 +98,7 @@ export default function App() {
           onApply={(opts) => pipeline.applyLoopAndRefresh(opts)}
         />
 
-        {/* 4. 手调表情轨道编辑器 */}
-        <ExpressionTrackSection
-          t={t}
-          exprState={exprState}
-          timeline={pipeline.timeline}
-          availableMorphs={pipeline.availableMorphs}
-          isBaked={isBaked}
-          disabled={pipeline.processing}
-        />
+
 
         {/* 5. 模型与动作文件投递区 */}
         <DropZoneSection t={t} pipeline={pipeline} />

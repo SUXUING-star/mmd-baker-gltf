@@ -1,3 +1,4 @@
+// src/hooks/useMmdPipeline/useTimelinePlayback.ts
 import { RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LandmarkData } from '../../types/types';
 import { ExpressionTrack } from '../../utils/expressionTrackEvaluator';
@@ -42,21 +43,20 @@ export function useTimelinePlayback(
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
 
   const timerRef = useRef<number | null>(null);
-  const fpsRef = useRef<number>(fps);
-  const currentFrameRef = useRef<number>(currentFrame);
-  const startFrameRef = useRef<number>(startFrame);
-  const endFrameRef = useRef<number>(endFrame);
-  const isPlayingRef = useRef<boolean>(isPlaying);
-  const loopOptionsRef = useRef<LoopBlendOptions>(loopOptions);
-  const expressionTracksRef = useRef<ExpressionTrack[]>(expressionTracks);
+  const fpsRef = useRef<number>(30);
+  const currentFrameRef = useRef<number>(0);
+  const startFrameRef = useRef<number>(0);
+  const endFrameRef = useRef<number>(0);
+  const isPlayingRef = useRef<boolean>(false);
 
-  fpsRef.current = fps;
-  currentFrameRef.current = currentFrame;
-  startFrameRef.current = startFrame;
-  endFrameRef.current = endFrame;
-  isPlayingRef.current = isPlaying;
+  // 仅同步外部传入的配置/引用，绝不在渲染体中回写播放游标和区间 state
+  const threeBridgeRef = useRef(threeBridge);
+  threeBridgeRef.current = threeBridge;
+
+  const loopOptionsRef = useRef<LoopBlendOptions>(loopOptions);
   loopOptionsRef.current = loopOptions;
-  expressionTracksRef.current = expressionTracks;
+
+  const expressionTracksRef = useRef<ExpressionTrack[]>(expressionTracks);
 
   const stopPlayback = useCallback(() => {
     if (timerRef.current !== null) {
@@ -87,17 +87,17 @@ export function useTimelinePlayback(
       });
       if (!result) return;
 
-      threeBridge.setMmdTime(
+      threeBridgeRef.current.setMmdTime(
         result.time,
         result.landmarks,
         result.blendTarget,
         result.expressionsOverride
       );
     },
-    [rawLandmarkDataRef, threeBridge]
+    [rawLandmarkDataRef]
   );
 
-  // 暂停状态下调整表情轨时，立即刷新当前帧预览
+  // 仅在表情轨实际变化且处于暂停状态时刷新当前帧
   useEffect(() => {
     expressionTracksRef.current = expressionTracks;
     if (!isPlayingRef.current && rawLandmarkDataRef.current) {
