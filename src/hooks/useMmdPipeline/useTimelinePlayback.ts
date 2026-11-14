@@ -3,7 +3,6 @@ import { RefObject, useCallback, useEffect, useMemo, useRef, useState } from 're
 import { CameraAnimationData } from '../../solvers/cameraSolver';
 import { LandmarkData } from '../../types/types';
 import { ExpressionTrack } from '../../utils/expressionTrackEvaluator';
-import { LoopBlendOptions } from '../../utils/loopBlender';
 import { findBestLoopEndFrame } from '../../utils/motionTrimmer';
 import { evaluatePreviewFrame } from './previewFrame';
 
@@ -38,7 +37,6 @@ export interface TimelineThreeBridge {
 export function useTimelinePlayback(
   rawLandmarkDataRef: RefObject<LandmarkData | null>,
   threeBridge: TimelineThreeBridge,
-  loopOptions: LoopBlendOptions,
   expressionTracks: ExpressionTrack[],
   cameraDataRef?: RefObject<CameraAnimationData | null>
 ) {
@@ -59,9 +57,6 @@ export function useTimelinePlayback(
   const threeBridgeRef = useRef(threeBridge);
   threeBridgeRef.current = threeBridge;
 
-  const loopOptionsRef = useRef<LoopBlendOptions>(loopOptions);
-  loopOptionsRef.current = loopOptions;
-
   const expressionTracksRef = useRef<ExpressionTrack[]>(expressionTracks);
 
   const stopPlayback = useCallback(() => {
@@ -79,7 +74,6 @@ export function useTimelinePlayback(
 
   const renderFrame = useCallback(
     (frameIdx: number) => {
-      // 1. 如果存在解算好的相机数据，同步渲染相机帧
       if (cameraDataRef?.current && threeBridgeRef.current.setCameraPose) {
         const camFrame = cameraDataRef.current.frames[frameIdx];
         if (camFrame) {
@@ -87,17 +81,12 @@ export function useTimelinePlayback(
         }
       }
 
-      // 2. 如果存在角色骨骼数据，渲染骨骼姿态
       const data = rawLandmarkDataRef.current;
       if (!data) return;
 
       const result = evaluatePreviewFrame({
         data,
         frameIdx,
-        startFrame: startFrameRef.current,
-        endFrame: endFrameRef.current,
-        fps: fpsRef.current,
-        loopOptions: loopOptionsRef.current,
         expressionTracks: expressionTracksRef.current,
       });
       if (!result) return;
@@ -105,7 +94,7 @@ export function useTimelinePlayback(
       threeBridgeRef.current.setMmdTime(
         result.time,
         result.landmarks,
-        result.blendTarget,
+        undefined,
         result.expressionsOverride
       );
     },
@@ -177,8 +166,7 @@ export function useTimelinePlayback(
   const initAndPlay = useCallback(
     (landmarkData: LandmarkData) => {
       const total = landmarkData.totalFrames;
-      const defaultEnd =
-        total > 30 ? findBestLoopEndFrame(landmarkData, 0, 30).bestFrameIndex : Math.max(0, total - 1);
+      const defaultEnd = Math.max(0, total - 1);
 
       fpsRef.current = landmarkData.fps;
       startFrameRef.current = 0;
@@ -192,6 +180,29 @@ export function useTimelinePlayback(
       startPlayback(0);
     },
     [startPlayback]
+  );
+
+  const updateTimelineData = useCallback(
+    (landmarkData: LandmarkData) => {
+      const total = landmarkData.totalFrames;
+      const defaultEnd = Math.max(0, total - 1);
+
+      fpsRef.current = landmarkData.fps;
+      startFrameRef.current = 0;
+      endFrameRef.current = defaultEnd;
+
+      setMaxFrames(total);
+      setFps(landmarkData.fps);
+      setStartFrame(0);
+      setEndFrame(defaultEnd);
+
+      if (currentFrameRef.current >= total) {
+        currentFrameRef.current = 0;
+        setCurrentFrame(0);
+      }
+      renderFrame(currentFrameRef.current);
+    },
+    [renderFrame]
   );
 
   const initAndPlayCamera = useCallback(
@@ -209,16 +220,6 @@ export function useTimelinePlayback(
       setEndFrame(defaultEnd);
 
       startPlayback(0);
-    },
-    [startPlayback]
-  );
-
-  const applyLoopAndRefresh = useCallback(
-    (newOptions?: LoopBlendOptions) => {
-      if (newOptions) {
-        loopOptionsRef.current = newOptions;
-      }
-      startPlayback(startFrameRef.current);
     },
     [startPlayback]
   );
@@ -277,28 +278,26 @@ export function useTimelinePlayback(
   );
 
   const resetTimeline = useCallback(() => {
-      stopPlayback();
-      fpsRef.current = 30;
-      currentFrameRef.current = 0;
-      startFrameRef.current = 0;
-      endFrameRef.current = 0;
-      setMaxFrames(0);
-      setFps(30);
-      setCurrentFrame(0);
-      setStartFrame(0);
-      setEndFrame(0);
-    }, [stopPlayback])
+    stopPlayback();
+    fpsRef.current = 30;
+    currentFrameRef.current = 0;
+    startFrameRef.current = 0;
+    endFrameRef.current = 0;
+    setMaxFrames(0);
+    setFps(30);
+    setCurrentFrame(0);
+    setStartFrame(0);
+    setEndFrame(0);
+  }, [stopPlayback]);
 
-  // 在最后的 return 中加上 resetTimeline：
-   return {
-     timeline,
-     startFrame,
-     endFrame,
-     stopPlayback,
-     resetTimeline,
-     initAndPlay,
-     initAndPlayCamera,
-     applyLoopAndRefresh,
-   };
-
+  return {
+    timeline,
+    startFrame,
+    endFrame,
+    stopPlayback,
+    resetTimeline,
+    initAndPlay,
+    updateTimelineData,
+    initAndPlayCamera,
+  };
 }

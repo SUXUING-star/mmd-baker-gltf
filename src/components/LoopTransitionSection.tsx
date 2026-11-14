@@ -100,9 +100,10 @@ export const LoopTransitionSection: React.FC<Props> = ({
               onChange={(e) => updateDraft('mode', e.target.value as LoopBlendMode)}
               style={{ width: '100%', padding: '4px 6px', borderRadius: 2, border: '1px solid #d9d9d9', fontSize: 12, background: '#fff' }}
             >
+              <option value="mirror">{t.loopModeMirror}</option>
+              <option value="cyclic">{t.loopModeCyclic}</option>
               <option value="idle">{t.loopModeIdle}</option>
               <option value="tail">{t.loopModeTail}</option>
-              <option value="cyclic">{t.loopModeCyclic}</option>
             </select>
           </div>
 
@@ -116,7 +117,7 @@ export const LoopTransitionSection: React.FC<Props> = ({
               max={2.0}
               step={0.05}
               value={draft.blendDuration}
-              disabled={disabled || draft.mode === 'cyclic'}
+              disabled={disabled}
               onChange={(e) => updateDraft('blendDuration', parseFloat(e.target.value))}
               style={{ width: '100%', cursor: disabled ? 'not-allowed' : 'pointer' }}
             />

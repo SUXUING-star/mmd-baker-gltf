@@ -2,18 +2,17 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { I18N, Lang } from '../../i18n';
 import { CameraAnimationData } from '../../solvers/cameraSolver';
-import { ModelMorphInfo } from '../../types/types';
+import { LandmarkData, ModelMorphInfo } from '../../types/types';
 import { exportCameraGLB, exportCameraVRMA } from '../../utils/cameraExporter';
 import { ExpressionTrack } from '../../utils/expressionTrackEvaluator';
-import { DEFAULT_LOOP_OPTIONS, LoopBlendOptions } from '../../utils/loopBlender';
+import { applyLoopToLandmarkData, DEFAULT_LOOP_OPTIONS, LoopBlendOptions } from '../../utils/loopBlender';
 import { VmdExpressionTrackSummary } from '../../utils/vmdExpressionAnalyzer';
 import { VrmaMetaOptions } from '../../utils/vrmaExporter';
-import { BakerThreeBridge, useMmdBaker } from './useMmdBaker';
+import { useMmdBaker } from './useMmdBaker';
 import { useMmdFiles } from './useMmdFiles';
 import { useMotionExporter } from './useMotionExporter';
 import {
     TimelineController,
-    TimelineThreeBridge,
     useTimelinePlayback,
 } from './useTimelinePlayback';
 
@@ -51,15 +50,8 @@ export interface MmdPipeline {
   getFrameVmdExpressions: (frame: number) => Record<string, number>;
 }
 
-export interface ThreeBridge extends BakerThreeBridge, TimelineThreeBridge {
-  clearPoints: () => void;
-  renderLandmarksPositions: (landmarks: Record<string, [number, number, number]>) => void;
-  viewMode?: 'orbit' | 'camera';
-  setViewMode?: (mode: 'orbit' | 'camera') => void;
-}
-
 export function useMmdPipeline(
-  threeBridge: ThreeBridge,
+  threeBridge: any,
   defaultPmxPath: string,
   defaultVmdPath: string,
   lang: Lang = 'zh',
@@ -72,6 +64,7 @@ export function useMmdPipeline(
   const [statusType, setStatusType] = useState<StatusType>('ready');
   const [errorMessage, setErrorMessage] = useState<string>('');
 
+  const activeLandmarkDataRef = useRef<LandmarkData | null>(null);
   const cameraDataRef = useRef<CameraAnimationData | null>(null);
   const [cameraData, setCameraDataState] = useState<CameraAnimationData | null>(null);
 
@@ -80,14 +73,14 @@ export function useMmdPipeline(
   const files = useMmdFiles(defaultPmxPath, defaultVmdPath, markReady);
   const baker = useMmdBaker(threeBridge);
   const playback = useTimelinePlayback(
-    baker.rawLandmarkDataRef,
+    activeLandmarkDataRef,
     threeBridge,
-    loopOptions,
     expressionTracks,
     cameraDataRef
   );
+
   const exporter = useMotionExporter({
-    rawLandmarkDataRef: baker.rawLandmarkDataRef,
+    rawLandmarkDataRef: activeLandmarkDataRef,
     expressionTracks,
     loopOptions,
     startFrame: playback.startFrame,
@@ -100,6 +93,7 @@ export function useMmdPipeline(
     (targetMode: BakeTargetType) => {
       playback.resetTimeline();
       baker.clearBakeData();
+      activeLandmarkDataRef.current = null;
       cameraDataRef.current = null;
       setCameraDataState(null);
       threeBridge.clearCurrentMesh();
@@ -125,6 +119,17 @@ export function useMmdPipeline(
     [bakeTargetType, clearAllBakedState]
   );
 
+  const applyLoopAndRefresh = useCallback(
+    (newOptions?: LoopBlendOptions) => {
+      if (!baker.rawLandmarkDataRef.current) return;
+      const opts = newOptions || loopOptions;
+      const effective = applyLoopToLandmarkData(baker.rawLandmarkDataRef.current, opts);
+      activeLandmarkDataRef.current = effective;
+      playback.updateTimelineData(effective);
+    },
+    [baker.rawLandmarkDataRef, loopOptions, playback]
+  );
+
   const runBakeMotion = useCallback(
     async (pmxTarget: File | string, vmdTarget: File | string, extraFiles: File[]) => {
       try {
@@ -134,15 +139,20 @@ export function useMmdPipeline(
         setStatusType('analyzing');
 
         const { landmarkData } = await baker.bake(pmxTarget, vmdTarget, extraFiles);
+
+        // 应用初始 loop 选项扩充插帧数据
+        const effective = applyLoopToLandmarkData(landmarkData, loopOptions);
+        activeLandmarkDataRef.current = effective;
+
         setStatusType('ready_to_export');
-        playback.initAndPlay(landmarkData);
+        playback.initAndPlay(effective);
       } catch (err: unknown) {
         console.error(err);
         setStatusType('error');
         setErrorMessage(err instanceof Error ? err.message : String(err));
       }
     },
-    [playback, baker]
+    [playback, baker, loopOptions]
   );
 
   const runBakeCamera = useCallback(
@@ -150,6 +160,7 @@ export function useMmdPipeline(
       try {
         playback.resetTimeline();
         baker.clearBakeData();
+        activeLandmarkDataRef.current = null;
         cameraDataRef.current = null;
         setCameraDataState(null);
         setStatusType('analyzing');
@@ -222,20 +233,18 @@ export function useMmdPipeline(
     if (!cameraData) return;
     try {
       const blob = await exportCameraGLB(cameraData, playback.startFrame, playback.endFrame);
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${files.getBaseFilename()}_camera.glb`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-      } catch (err) {
-        alert(t.exportCameraFail('GLB', String(err)));
-      }
-    },
-    [cameraData, playback.startFrame, playback.endFrame, files, t]
-  );
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${files.getBaseFilename()}_camera.glb`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      alert(t.exportCameraFail('GLB', String(err)));
+    }
+  }, [cameraData, playback.startFrame, playback.endFrame, files, t]);
 
   const downloadVrma = useCallback(
     async (metaOptions?: VrmaMetaOptions) => {
@@ -303,7 +312,7 @@ export function useMmdPipeline(
     downloadCameraVrma,
     downloadCameraGlb,
     downloadBoth,
-    applyLoopAndRefresh: playback.applyLoopAndRefresh,
+    applyLoopAndRefresh,
     vmdExpressionTracks: baker.vmdExpressionTracks,
     getFrameVmdExpressions: baker.getFrameVmdExpressions,
   };

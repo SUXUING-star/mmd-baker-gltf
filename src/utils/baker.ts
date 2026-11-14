@@ -63,7 +63,79 @@ function resolveAnimatedMorphs(mesh: THREE.SkinnedMesh, animation: THREE.Animati
   return bindings;
 }
 
-/** 仅加载 PMX 角色模型（不绑定骨骼动画），用于镜头视角下展示预览角色 */
+/**
+ * 自动检测并裁剪首尾静态 A-Pose / T-Pose 空白帧，重置时间轴
+ */
+function cleanRestPoseFrames(
+  frames: LandmarkFrame[],
+  restLm: Record<string, [number, number, number]>
+): LandmarkFrame[] {
+  if (frames.length < 10) return frames;
+
+  // 1. 扫描开头是否存在与 Rest Pose 几乎一致的静态 A-Pose 帧
+  let startIndex = 0;
+  while (startIndex < frames.length - 5) {
+    const frameLm = frames[startIndex].landmarks;
+    let sumSq = 0;
+    let count = 0;
+
+    for (const k in restLm) {
+      if (frameLm[k] && restLm[k]) {
+        const dx = frameLm[k][0] - restLm[k][0];
+        const dy = frameLm[k][1] - restLm[k][1];
+        const dz = frameLm[k][2] - restLm[k][2];
+        sumSq += dx * dx + dy * dy + dz * dz;
+        count++;
+      }
+    }
+
+    const avgDist = count > 0 ? Math.sqrt(sumSq / count) : 0;
+    // 如果与 A-Pose 姿态平均偏差小于 0.008（静止 A-Pose），则自动裁剪
+    if (avgDist < 0.008) {
+      startIndex++;
+    } else {
+      break;
+    }
+  }
+
+  // 2. 扫描结尾是否存在静态 A-Pose 帧
+  let endIndex = frames.length - 1;
+  while (endIndex > startIndex + 5) {
+    const frameLm = frames[endIndex].landmarks;
+    let sumSq = 0;
+    let count = 0;
+
+    for (const k in restLm) {
+      if (frameLm[k] && restLm[k]) {
+        const dx = frameLm[k][0] - restLm[k][0];
+        const dy = frameLm[k][1] - restLm[k][1];
+        const dz = frameLm[k][2] - restLm[k][2];
+        sumSq += dx * dx + dy * dy + dz * dz;
+        count++;
+      }
+    }
+
+    const avgDist = count > 0 ? Math.sqrt(sumSq / count) : 0;
+    if (avgDist < 0.008) {
+      endIndex--;
+    } else {
+      break;
+    }
+  }
+
+  // 如果成功裁剪掉了空 A-Pose 帧，重置时间轴起点
+  if (startIndex > 0 || endIndex < frames.length - 1) {
+    const sliced = frames.slice(startIndex, endIndex + 1);
+    const baseTime = sliced[0].time;
+    return sliced.map((f) => ({
+      ...f,
+      time: Number((f.time - baseTime).toFixed(3)),
+    }));
+  }
+
+  return frames;
+}
+
 export async function loadPmxMeshOnly(
   pmxInput: File | string,
   extraFiles?: File[]
@@ -282,7 +354,7 @@ export async function bakePure3DLandmarks(
     const dt = 1.0 / fps;
     const totalDuration = animation.duration;
     const totalFrames = Math.ceil(totalDuration * fps);
-    const bakedFrames: LandmarkFrame[] = [];
+    const rawBakedFrames: LandmarkFrame[] = [];
 
     for (let f = 0; f < totalFrames; f++) {
       helper.update(dt);
@@ -311,7 +383,7 @@ export async function bakePure3DLandmarks(
         }
       }
 
-      bakedFrames.push({
+      rawBakedFrames.push({
         time: Number((f * dt).toFixed(3)),
         landmarks,
         ...(activeMorphs.length > 0 ? { expressions } : {}),
@@ -340,12 +412,17 @@ export async function bakePure3DLandmarks(
     }
     mesh.updateMatrixWorld(true);
 
+    // 自动清除解算开头的静态 A-Pose 空白帧
+    const cleanedFrames = cleanRestPoseFrames(rawBakedFrames, restLandmarks);
+    const effectiveTotalFrames = cleanedFrames.length;
+    const effectiveDuration = effectiveTotalFrames > 0 ? cleanedFrames[effectiveTotalFrames - 1].time : 0;
+
     return {
       landmarkData: {
         fps,
-        totalFrames,
-        duration: totalDuration,
-        frames: bakedFrames,
+        totalFrames: effectiveTotalFrames,
+        duration: effectiveDuration,
+        frames: cleanedFrames,
         restLandmarks,
         availableMorphs,
       },
