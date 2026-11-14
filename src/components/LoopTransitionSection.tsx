@@ -49,21 +49,13 @@ export const LoopTransitionSection: React.FC<Props> = ({
   };
 
   return (
-    <div
-      style={{
-        background: '#fafafa',
-        border: '1px solid #e5e7eb',
-        borderRadius: 4,
-        padding: 12,
-        marginBottom: 16,
-      }}
-    >
+    <div style={{ marginBottom: 16 }}>
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          marginBottom: draft.enabled ? 10 : 0,
+          marginBottom: draft.enabled ? 8 : 0,
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -89,7 +81,7 @@ export const LoopTransitionSection: React.FC<Props> = ({
       </div>
 
       {draft.enabled && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 8, borderTop: '1px dashed #d9d9d9' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 8, borderTop: '1px dashed #e5e7eb' }}>
           <div>
             <label style={{ display: 'block', fontSize: 11, color: '#4b5563', marginBottom: 3 }}>
               {t.loopModeLabel}
@@ -98,7 +90,7 @@ export const LoopTransitionSection: React.FC<Props> = ({
               value={draft.mode}
               disabled={disabled}
               onChange={(e) => updateDraft('mode', e.target.value as LoopBlendMode)}
-              style={{ width: '100%', padding: '4px 6px', borderRadius: 2, border: '1px solid #d9d9d9', fontSize: 12, background: '#fff' }}
+              style={{ width: '100%', padding: '5px 8px', borderRadius: 2, border: '1px solid #d9d9d9', fontSize: 12, background: 'transparent' }}
             >
               <option value="mirror">{t.loopModeMirror}</option>
               <option value="cyclic">{t.loopModeCyclic}</option>

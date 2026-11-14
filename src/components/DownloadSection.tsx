@@ -61,7 +61,7 @@ export const DownloadSection: React.FC<DownloadSectionProps> = ({ t, pipeline, m
             style={{
               padding: '3px 8px',
               fontSize: 11,
-              background: '#ffffff',
+              background: 'transparent',
               border: '1px solid #d9d9d9',
               borderRadius: 2,
               cursor: 'pointer',
@@ -106,7 +106,7 @@ export const DownloadSection: React.FC<DownloadSectionProps> = ({ t, pipeline, m
         </button>
       </div>
 
-      {/* 导出区域 (同时包含 VRMA, GLB 和全部导出) */}
+      {/* 导出区域 */}
       {isBaked && (
         <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: 10, marginTop: 10 }}>
           <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 8 }}>
@@ -122,7 +122,7 @@ export const DownloadSection: React.FC<DownloadSectionProps> = ({ t, pipeline, m
                 style={{
                   flex: 1,
                   padding: '8px 10px',
-                  background: '#ffffff',
+                  background: 'transparent',
                   color: '#1677ff',
                   border: '1px solid #1677ff',
                   borderRadius: 2,
@@ -146,7 +146,7 @@ export const DownloadSection: React.FC<DownloadSectionProps> = ({ t, pipeline, m
                 style={{
                   flex: 1,
                   padding: '8px 10px',
-                  background: '#ffffff',
+                  background: 'transparent',
                   color: '#374151',
                   border: '1px solid #d9d9d9',
                   borderRadius: 2,

@@ -161,25 +161,23 @@ export const DropZoneSection: React.FC<DropZoneSectionProps> = ({ t, pipeline })
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {/* 烘焙类型切换：角色动作 vs 镜头动画 */}
-      <div style={{ background: '#f3f4f6', padding: 3, borderRadius: 6, display: 'flex' }}>
+      <div style={{ display: 'flex', borderBottom: '1px solid #e5e7eb', paddingBottom: 6, gap: 12 }}>
         <button
           type="button"
           onClick={() => setBakeTargetType('motion')}
           disabled={processing}
           style={{
-            flex: 1,
-            padding: '7px 0',
+            background: 'none',
             border: 'none',
-            borderRadius: 4,
-            fontSize: 12,
-            fontWeight: 600,
+            padding: '4px 2px',
+            fontSize: 13,
+            fontWeight: bakeTargetType === 'motion' ? 600 : 400,
+            color: bakeTargetType === 'motion' ? '#1677ff' : '#6b7280',
+            borderBottom: bakeTargetType === 'motion' ? '2px solid #1677ff' : '2px solid transparent',
             cursor: processing ? 'not-allowed' : 'pointer',
-            background: bakeTargetType === 'motion' ? '#ffffff' : 'transparent',
-            color: bakeTargetType === 'motion' ? '#1677ff' : '#4b5563',
-            boxShadow: bakeTargetType === 'motion' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-            transition: 'all 0.2s',
+            marginBottom: -7,
           }}
         >
           {t.bakeModeMotion}
@@ -189,46 +187,36 @@ export const DropZoneSection: React.FC<DropZoneSectionProps> = ({ t, pipeline })
           onClick={() => setBakeTargetType('camera')}
           disabled={processing}
           style={{
-            flex: 1,
-            padding: '7px 0',
+            background: 'none',
             border: 'none',
-            borderRadius: 4,
-            fontSize: 12,
-            fontWeight: 600,
+            padding: '4px 2px',
+            fontSize: 13,
+            fontWeight: bakeTargetType === 'camera' ? 600 : 400,
+            color: bakeTargetType === 'camera' ? '#1677ff' : '#6b7280',
+            borderBottom: bakeTargetType === 'camera' ? '2px solid #1677ff' : '2px solid transparent',
             cursor: processing ? 'not-allowed' : 'pointer',
-            background: bakeTargetType === 'camera' ? '#ffffff' : 'transparent',
-            color: bakeTargetType === 'camera' ? '#1677ff' : '#4b5563',
-            boxShadow: bakeTargetType === 'camera' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-            transition: 'all 0.2s',
+            marginBottom: -7,
           }}
         >
           {t.bakeModeCamera}
         </button>
       </div>
 
-      {/* PMX 模型选择与拖拽区域 */}
-      <div
-        onDragOver={handleDragOver}
-        onDrop={handleDropPmx}
-        style={{
-          border: '1px solid #e5e7eb',
-          borderRadius: 6,
-          padding: 10,
-          background: '#fafafa',
-          transition: 'all 0.2s',
-        }}
-      >
+      {/* PMX 模型直接嵌入区域 */}
+      <div>
         <div style={{ fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
           {t.baseModel}
         </div>
 
         <div
+          onDragOver={handleDragOver}
+          onDrop={handleDropPmx}
           onClick={() => !processing && pmxInputRef.current?.click()}
           style={{
             padding: '12px 10px',
-            border: '2px dashed #d1d5db',
+            border: '1px dashed #d1d5db',
             borderRadius: 4,
-            background: '#ffffff',
+            background: 'transparent',
             marginBottom: 8,
             textAlign: 'center',
             cursor: processing ? 'not-allowed' : 'pointer',
@@ -237,12 +225,10 @@ export const DropZoneSection: React.FC<DropZoneSectionProps> = ({ t, pipeline })
           <div style={{ fontSize: 12, fontWeight: 600, color: '#1677ff', marginBottom: 2 }}>
             {customPmxFile ? customPmxFile.name : t.defaultModelName}
           </div>
-          <div style={{ fontSize: 10, color: '#9ca3af' }}>
-            {t.pmxDropSubHint}
-          </div>
+          <div style={{ fontSize: 10, color: '#9ca3af' }}>{t.pmxDropSubHint}</div>
         </div>
 
-        <div style={{ display: 'flex', gap: 4 }}>
+        <div style={{ display: 'flex', gap: 6 }}>
           <input
             ref={pmxInputRef}
             type="file"
@@ -265,10 +251,10 @@ export const DropZoneSection: React.FC<DropZoneSectionProps> = ({ t, pipeline })
             disabled={processing}
             style={{
               flex: 1,
-              padding: '4px 6px',
+              padding: '5px 8px',
               fontSize: 11,
               border: '1px solid #d9d9d9',
-              borderRadius: 2,
+              borderRadius: 3,
               cursor: processing ? 'not-allowed' : 'pointer',
               background: '#ffffff',
             }}
@@ -281,10 +267,10 @@ export const DropZoneSection: React.FC<DropZoneSectionProps> = ({ t, pipeline })
             disabled={processing}
             style={{
               flex: 1,
-              padding: '4px 6px',
+              padding: '5px 8px',
               fontSize: 11,
               border: '1px solid #d9d9d9',
-              borderRadius: 2,
+              borderRadius: 3,
               cursor: processing ? 'not-allowed' : 'pointer',
               background: '#ffffff',
             }}
@@ -297,11 +283,11 @@ export const DropZoneSection: React.FC<DropZoneSectionProps> = ({ t, pipeline })
               onClick={resetPmx}
               disabled={processing}
               style={{
-                padding: '4px 6px',
+                padding: '5px 8px',
                 fontSize: 11,
                 border: '1px solid #ff4d4f',
                 color: '#ff4d4f',
-                borderRadius: 2,
+                borderRadius: 3,
                 cursor: processing ? 'not-allowed' : 'pointer',
                 background: '#ffffff',
               }}
@@ -312,8 +298,8 @@ export const DropZoneSection: React.FC<DropZoneSectionProps> = ({ t, pipeline })
         </div>
       </div>
 
-      {/* VMD 动画拖拽或点击上传区域 */}
-      <div style={{ border: '1px solid #e5e7eb', borderRadius: 6, padding: 10, background: '#fafafa' }}>
+      {/* VMD 动画直接嵌入区域 */}
+      <div>
         <div style={{ fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
           {bakeTargetType === 'motion' ? t.vmdMotionTitle : t.vmdCameraTitle}
         </div>
@@ -330,9 +316,9 @@ export const DropZoneSection: React.FC<DropZoneSectionProps> = ({ t, pipeline })
           onDrop={handleDropVmd}
           style={{
             padding: '16px 12px',
-            border: '2px dashed #1677ff',
+            border: '1px dashed #1677ff',
             borderRadius: 4,
-            background: '#ffffff',
+            background: 'transparent',
             cursor: processing ? 'not-allowed' : 'pointer',
             textAlign: 'center',
           }}

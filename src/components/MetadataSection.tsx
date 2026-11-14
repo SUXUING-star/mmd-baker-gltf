@@ -12,11 +12,13 @@ export const MetadataSection: React.FC<MetadataSectionProps> = ({ t, meta, disab
   const { metadata, updateField } = meta;
 
   return (
-    <div style={{ border: '1px solid #e0e0e0', borderRadius: 4, padding: 14, background: '#fafafa', marginBottom: 16 }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: '#333', marginBottom: 10 }}>{t.metadataTitle}</div>
-      <div className="mmd-meta-grid">
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: '#111827', marginBottom: 8 }}>
+        {t.metadataTitle}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 4 }}>
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#4b5563', marginBottom: 3 }}>
             {t.metaTitle}
           </label>
           <input
@@ -25,11 +27,11 @@ export const MetadataSection: React.FC<MetadataSectionProps> = ({ t, meta, disab
             placeholder={t.metaTitlePlaceholder}
             disabled={disabled}
             onChange={(e) => updateField('title', e.target.value)}
-            style={{ width: '100%', boxSizing: 'border-box', padding: '6px 8px', fontSize: 12, border: '1px solid #d9d9d9', borderRadius: 2 }}
+            style={{ width: '100%', boxSizing: 'border-box', padding: '5px 8px', fontSize: 12, border: '1px solid #d9d9d9', borderRadius: 2, background: 'transparent' }}
           />
         </div>
         <div>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 4 }}>
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#4b5563', marginBottom: 3 }}>
             {t.metaAuthors}
           </label>
           <input
@@ -38,11 +40,11 @@ export const MetadataSection: React.FC<MetadataSectionProps> = ({ t, meta, disab
             placeholder={t.metaAuthorsPlaceholder}
             disabled={disabled}
             onChange={(e) => updateField('authors', e.target.value)}
-            style={{ width: '100%', boxSizing: 'border-box', padding: '6px 8px', fontSize: 12, border: '1px solid #d9d9d9', borderRadius: 2 }}
+            style={{ width: '100%', boxSizing: 'border-box', padding: '5px 8px', fontSize: 12, border: '1px solid #d9d9d9', borderRadius: 2, background: 'transparent' }}
           />
         </div>
         <div>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 4 }}>
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#4b5563', marginBottom: 3 }}>
             {t.metaCopyright}
           </label>
           <input
@@ -51,11 +53,11 @@ export const MetadataSection: React.FC<MetadataSectionProps> = ({ t, meta, disab
             placeholder={t.metaCopyrightPlaceholder}
             disabled={disabled}
             onChange={(e) => updateField('copyrightInformation', e.target.value)}
-            style={{ width: '100%', boxSizing: 'border-box', padding: '6px 8px', fontSize: 12, border: '1px solid #d9d9d9', borderRadius: 2 }}
+            style={{ width: '100%', boxSizing: 'border-box', padding: '5px 8px', fontSize: 12, border: '1px solid #d9d9d9', borderRadius: 2, background: 'transparent' }}
           />
         </div>
         <div>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 4 }}>
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#4b5563', marginBottom: 3 }}>
             {t.metaLicense}
           </label>
           <input
@@ -64,7 +66,7 @@ export const MetadataSection: React.FC<MetadataSectionProps> = ({ t, meta, disab
             placeholder={t.metaLicensePlaceholder}
             disabled={disabled}
             onChange={(e) => updateField('licenseUrl', e.target.value)}
-            style={{ width: '100%', boxSizing: 'border-box', padding: '6px 8px', fontSize: 12, border: '1px solid #d9d9d9', borderRadius: 2 }}
+            style={{ width: '100%', boxSizing: 'border-box', padding: '5px 8px', fontSize: 12, border: '1px solid #d9d9d9', borderRadius: 2, background: 'transparent' }}
           />
         </div>
       </div>

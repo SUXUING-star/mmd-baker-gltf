@@ -1,5 +1,6 @@
 // src/App.tsx
 import { useMemo, useRef, useState } from 'react';
+import './App.css';
 import { ClipSection } from './components/ClipSection';
 import { DownloadSection } from './components/DownloadSection';
 import { DropZoneSection } from './components/DropZoneSection';
@@ -48,104 +49,17 @@ export default function App() {
 
   return (
     <div className="mmd-page">
-      <style>{`
-        .mmd-page {
-          min-height: 100vh;
-          width: 100%;
-          background: #ffffff;
-          padding: 16px 0;
-          box-sizing: border-box;
-          overflow-y: auto;
-          color: #1f2937;
-          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-        }
-
-        .mmd-shell {
-          max-width: 960px;
-          margin: 0 auto;
-          padding: 0 16px;
-          box-sizing: border-box;
-        }
-
-        /* 手机端默认纵向单列 */
-        .mmd-workspace {
-          display: flex;
-          flex-direction: column;
-        }
-
-        .mmd-col-left,
-        .mmd-col-center,
-        .mmd-col-right {
-          display: contents;
-        }
-
-        .mmd-slot-canvas { order: 1; }
-        .mmd-slot-clip { order: 2; }
-        .mmd-slot-loop { order: 3; }
-        .mmd-slot-dropzone { order: 4; }
-        .mmd-slot-meta { order: 5; }
-        .mmd-slot-download { order: 6; }
-
-        .mmd-dropzone-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 12px;
-          margin-bottom: 16px;
-        }
-
-        /* 电脑端 (>= 1024px) 三栏布局 */
-        @media (min-width: 1024px) {
-          .mmd-shell {
-            max-width: 1600px;
-            padding: 0 20px;
-          }
-
-          .mmd-workspace {
-            display: grid;
-            grid-template-columns: 220px minmax(0, 1fr) 300px;
-            gap: 16px;
-            align-items: start;
-          }
-
-          .mmd-col-left,
-          .mmd-col-center,
-          .mmd-col-right {
-            display: flex;
-            flex-direction: column;
-            min-width: 0;
-          }
-
-          .mmd-slot-canvas,
-          .mmd-slot-clip,
-          .mmd-slot-loop,
-          .mmd-slot-dropzone,
-          .mmd-slot-meta,
-          .mmd-slot-download {
-            order: initial;
-          }
-
-          .mmd-dropzone-grid {
-            grid-template-columns: 1fr;
-            gap: 12px;
-          }
-        }
-      `}</style>
-
       <div className="mmd-shell">
         {/* 顶部标题与语言切换 */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 12, flexWrap: 'wrap' }}>
-          <h2 style={{ margin: 0, color: '#111827', fontSize: 18, fontWeight: 700 }}>{t.title}</h2>
-          <div style={{ display: 'flex', gap: 2, background: '#f3f4f6', padding: 2, borderRadius: 4 }}>
+        <div className="mmd-header">
+          <h2 className="mmd-header-title">{t.title}</h2>
+          <div className="mmd-lang-switch">
             {(['zh', 'en', 'ja'] as const).map((l) => (
               <button
                 key={l}
                 onClick={() => switchLanguage(l)}
+                className="mmd-lang-btn"
                 style={{
-                  border: 'none',
-                  borderRadius: 3,
-                  padding: '3px 8px',
-                  fontSize: 12,
-                  cursor: 'pointer',
                   background: lang === l ? '#1677ff' : 'transparent',
                   color: lang === l ? '#ffffff' : '#4b5563',
                   fontWeight: lang === l ? 600 : 400,
@@ -159,7 +73,7 @@ export default function App() {
 
         {/* 响应式三栏工作区 */}
         <div className="mmd-workspace">
-          {/* 左栏：模型与动作/镜头导入 */}
+          {/* 左栏：直接嵌入的模型与动作/镜头导入 */}
           <div className="mmd-col-left">
             <div className="mmd-slot-dropzone">
               <DropZoneSection t={t} pipeline={pipeline} />
@@ -192,7 +106,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* 右栏：元数据 + 烘焙导出 */}
+          {/* 右栏：直接嵌入的循环、元数据与导出控制 */}
           <div className="mmd-col-right">
             {pipeline.bakeTargetType === 'motion' && (
               <div className="mmd-slot-loop">
@@ -215,6 +129,21 @@ export default function App() {
             </div>
           </div>
         </div>
+
+        {/* 底部 GitHub 链接 */}
+        <footer className="mmd-footer">
+          <a
+            href="https://github.com/SUXUING-star/mmd-motion-baker-gltf"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mmd-footer-link"
+          >
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+            </svg>
+            <span>GitHub: SUXUING-star/mmd-motion-baker-gltf</span>
+          </a>
+        </footer>
       </div>
     </div>
   );

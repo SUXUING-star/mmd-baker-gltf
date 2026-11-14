@@ -13,6 +13,10 @@ interface BoneRestTransform {
 
 export type ViewMode = 'orbit' | 'camera';
 
+// 统一相机默认站位配置（适配 MMD 角色整体身形与开阔舞台视野）
+const DEFAULT_CAMERA_POS = new THREE.Vector3(0, 12, 34);
+const DEFAULT_CAMERA_TARGET = new THREE.Vector3(0, 8, 0);
+
 export function useThreeScene(containerRef: React.RefObject<HTMLDivElement | null>) {
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -39,12 +43,13 @@ export function useThreeScene(containerRef: React.RefObject<HTMLDivElement | nul
     scene.background = new THREE.Color(0xffffff);
     sceneRef.current = scene;
 
-    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
-    camera.position.set(0, 10, 25);
+    // 扩大相机远裁剪面至 1000，避免大网格在远处被裁切
+    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+    camera.position.copy(DEFAULT_CAMERA_POS);
     cameraRef.current = camera;
 
     // 创建自由轨道模式下显示的镜头视锥框 Helper
-    const helperCamera = new THREE.PerspectiveCamera(45, width / height, 0.5, 12);
+    const helperCamera = new THREE.PerspectiveCamera(45, width / height, 0.5, 40);
     helperCameraRef.current = helperCamera;
     const cameraHelper = new THREE.CameraHelper(helperCamera);
     cameraHelper.visible = false;
@@ -60,19 +65,21 @@ export function useThreeScene(containerRef: React.RefObject<HTMLDivElement | nul
     containerRef.current.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(0, 9, 0);
+    controls.target.copy(DEFAULT_CAMERA_TARGET);
     controls.update();
     controlsRef.current = controls;
 
     scene.add(new THREE.AmbientLight(0xffffff, 1.2));
     const dirLight1 = new THREE.DirectionalLight(0xffffff, 1.5);
-    dirLight1.position.set(10, 20, 15);
+    dirLight1.position.set(15, 25, 20);
     scene.add(dirLight1);
     const dirLight2 = new THREE.DirectionalLight(0xffffff, 0.8);
-    dirLight2.position.set(-10, 10, -15);
+    dirLight2.position.set(-15, 15, -20);
     scene.add(dirLight2);
 
-    const gridHelper = new THREE.GridHelper(20, 20, 0x007acc, 0xd0d0d0);
+    // 将地板网格扩大至 100x100（50细分），留出足够宽敞的舞台空间感
+    const gridHelper = new THREE.GridHelper(100, 50, 0x1677ff, 0xe5e7eb);
+    gridHelper.position.y = 0;
     scene.add(gridHelper);
 
     const pointsGroup = new THREE.Group();
@@ -95,41 +102,37 @@ export function useThreeScene(containerRef: React.RefObject<HTMLDivElement | nul
     };
   }, [containerRef]);
 
-  // 1. 修改 setViewMode（补充 updateProjectionMatrix）
-    const setViewMode = useCallback((mode: ViewMode) => {
-      viewModeRef.current = mode;
-      setViewModeState(mode);
+  const setViewMode = useCallback((mode: ViewMode) => {
+    viewModeRef.current = mode;
+    setViewModeState(mode);
 
-      if (controlsRef.current) {
-        controlsRef.current.enabled = mode === 'orbit';
-      }
-      if (cameraHelperRef.current) {
-        cameraHelperRef.current.visible = mode === 'orbit';
-      }
-      if (mode === 'orbit' && cameraRef.current && controlsRef.current) {
-        cameraRef.current.fov = 45;
-        cameraRef.current.updateProjectionMatrix();
-        cameraRef.current.position.set(0, 10, 25);
-        controlsRef.current.target.set(0, 9, 0);
-        controlsRef.current.update();
-      }
-    }, []);
-
-  // 2. 修改 setMmdCamera（切回动作模式时强制关闭镜头框、恢复自由轨道与 fov=45）
-    const setMmdCamera = useCallback(() => {
-      if (!cameraRef.current || !controlsRef.current) return;
-      if (cameraHelperRef.current) {
-        cameraHelperRef.current.visible = false;
-      }
-      controlsRef.current.enabled = true;
+    if (controlsRef.current) {
+      controlsRef.current.enabled = mode === 'orbit';
+    }
+    if (cameraHelperRef.current) {
+      cameraHelperRef.current.visible = mode === 'orbit';
+    }
+    if (mode === 'orbit' && cameraRef.current && controlsRef.current) {
       cameraRef.current.fov = 45;
       cameraRef.current.updateProjectionMatrix();
-      cameraRef.current.position.set(0, 10, 25);
-      controlsRef.current.target.set(0, 9, 0);
+      cameraRef.current.position.copy(DEFAULT_CAMERA_POS);
+      controlsRef.current.target.copy(DEFAULT_CAMERA_TARGET);
       controlsRef.current.update();
-    }, []);
+    }
+  }, []);
 
-
+  const setMmdCamera = useCallback(() => {
+    if (!cameraRef.current || !controlsRef.current) return;
+    if (cameraHelperRef.current) {
+      cameraHelperRef.current.visible = false;
+    }
+    controlsRef.current.enabled = true;
+    cameraRef.current.fov = 45;
+    cameraRef.current.updateProjectionMatrix();
+    cameraRef.current.position.copy(DEFAULT_CAMERA_POS);
+    controlsRef.current.target.copy(DEFAULT_CAMERA_TARGET);
+    controlsRef.current.update();
+  }, []);
 
   const setCameraPose = useCallback(
     (
@@ -192,30 +195,29 @@ export function useThreeScene(containerRef: React.RefObject<HTMLDivElement | nul
     clearPoints();
   }, [clearPoints]);
 
-  // 3. 修改 setupMmdAnimation（animation 改为可选，镜头模式不绑定旧动画 mixer）
-    const setupMmdAnimation = useCallback(
-      (mesh: THREE.SkinnedMesh, animation?: THREE.AnimationClip) => {
-        clearCurrentMesh();
-        const scene = sceneRef.current;
-        if (!scene) return;
+  const setupMmdAnimation = useCallback(
+    (mesh: THREE.SkinnedMesh, animation?: THREE.AnimationClip) => {
+      clearCurrentMesh();
+      const scene = sceneRef.current;
+      if (!scene) return;
 
-        scene.add(mesh);
-        currentMeshRef.current = mesh;
+      scene.add(mesh);
+      currentMeshRef.current = mesh;
 
-        restBonesRef.current = mesh.skeleton.bones.map((b) => ({
-          pos: b.position.clone(),
-          quat: b.quaternion.clone(),
-          scale: b.scale.clone(),
-        }));
+      restBonesRef.current = mesh.skeleton.bones.map((b) => ({
+        pos: b.position.clone(),
+        quat: b.quaternion.clone(),
+        scale: b.scale.clone(),
+      }));
 
-        if (animation) {
-          const helper = new MMDAnimationHelper({ afterglow: 0, resetPhysicsOnLoop: false });
-          helper.add(mesh, { animation, physics: false, warmup: 0 });
-          mmdHelperRef.current = helper;
-        }
-      },
-      [clearCurrentMesh]
-    );
+      if (animation) {
+        const helper = new MMDAnimationHelper({ afterglow: 0, resetPhysicsOnLoop: false });
+        helper.add(mesh, { animation, physics: false, warmup: 0 });
+        mmdHelperRef.current = helper;
+      }
+    },
+    [clearCurrentMesh]
+  );
 
   const renderLandmarksPositions = useCallback((landmarks: Record<string, [number, number, number]>) => {
     const pointsGroup = pointsGroupRef.current;
