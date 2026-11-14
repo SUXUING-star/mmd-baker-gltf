@@ -16,6 +16,7 @@ interface ClipSectionProps {
   availableMorphs: ModelMorphInfo[];
   vmdExpressionTracks: VmdExpressionTrackSummary[];
   getFrameVmdExpressions: (frame: number) => Record<string, number>;
+  isCameraMode?: boolean;
   disabled?: boolean;
 }
 
@@ -26,30 +27,40 @@ export const ClipSection: React.FC<ClipSectionProps> = ({
   availableMorphs,
   vmdExpressionTracks,
   getFrameVmdExpressions,
+  isCameraMode = false,
   disabled = false,
 }) => {
   if (timeline.maxFrames === 0) return null;
 
   return (
     <div style={{ padding: '14px 16px', background: '#fafafa', border: '1px solid #e8e8e8', borderRadius: 8, marginBottom: 16 }}>
-      <TransportBar t={t} timeline={timeline} exprState={exprState} disabled={disabled} />
+      <TransportBar
+        t={t}
+        timeline={timeline}
+        exprState={exprState}
+        isCameraMode={isCameraMode}
+        disabled={disabled}
+      />
       <PrTimeline
         t={t}
         timeline={timeline}
         exprState={exprState}
         vmdExpressionTracks={vmdExpressionTracks}
         getFrameVmdExpressions={getFrameVmdExpressions}
+        isCameraMode={isCameraMode}
         disabled={disabled}
       />
       <TrimRangeBar t={t} timeline={timeline} disabled={disabled} />
-      <ExpressionControls
-        t={t}
-        timeline={timeline}
-        exprState={exprState}
-        availableMorphs={availableMorphs}
-        vmdExpressionTracks={vmdExpressionTracks}
-        disabled={disabled}
-      />
+      {!isCameraMode && (
+        <ExpressionControls
+          t={t}
+          timeline={timeline}
+          exprState={exprState}
+          availableMorphs={availableMorphs}
+          vmdExpressionTracks={vmdExpressionTracks}
+          disabled={disabled}
+        />
+      )}
     </div>
   );
 };

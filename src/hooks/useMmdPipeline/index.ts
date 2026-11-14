@@ -3,7 +3,6 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { I18N, Lang } from '../../i18n';
 import { CameraAnimationData } from '../../solvers/cameraSolver';
 import { ModelMorphInfo } from '../../types/types';
-import { bakeCameraVmd } from '../../utils/cameraBaker';
 import { exportCameraGLB, exportCameraVRMA } from '../../utils/cameraExporter';
 import { ExpressionTrack } from '../../utils/expressionTrackEvaluator';
 import { DEFAULT_LOOP_OPTIONS, LoopBlendOptions } from '../../utils/loopBlender';
@@ -67,7 +66,7 @@ export function useMmdPipeline(
   loopOptions: LoopBlendOptions = DEFAULT_LOOP_OPTIONS,
   expressionTracks: ExpressionTrack[] = []
 ): MmdPipeline {
-  const [bakeTargetType, setBakeTargetType] = useState<BakeTargetType>('motion');
+  const [bakeTargetType, setBakeTargetTypeState] = useState<BakeTargetType>('motion');
   const [statusType, setStatusType] = useState<StatusType>('ready');
   const [errorMessage, setErrorMessage] = useState<string>('');
 
@@ -94,11 +93,43 @@ export function useMmdPipeline(
     getBaseFilename: files.getBaseFilename,
   });
 
+  const clearAllBakedState = useCallback(
+    (targetMode: BakeTargetType) => {
+      playback.resetTimeline();
+      baker.clearBakeData();
+      cameraDataRef.current = null;
+      setCameraDataState(null);
+      threeBridge.clearCurrentMesh();
+
+      if (targetMode === 'motion') {
+        threeBridge.setMmdCamera();
+      } else {
+        threeBridge.setViewMode?.('camera');
+      }
+
+      setStatusType('ready');
+      setErrorMessage('');
+    },
+    [playback, baker, threeBridge]
+  );
+
+  const setBakeTargetType = useCallback(
+    (nextType: BakeTargetType) => {
+      if (nextType === bakeTargetType) return;
+      clearAllBakedState(nextType);
+      setBakeTargetTypeState(nextType);
+    },
+    [bakeTargetType, clearAllBakedState]
+  );
+
   const runBakeMotion = useCallback(
     async (pmxTarget: File | string, vmdTarget: File | string, extraFiles: File[]) => {
       try {
-        playback.stopPlayback();
+        playback.resetTimeline();
+        cameraDataRef.current = null;
+        setCameraDataState(null);
         setStatusType('analyzing');
+
         const { landmarkData } = await baker.bake(pmxTarget, vmdTarget, extraFiles);
         setStatusType('ready_to_export');
         playback.initAndPlay(landmarkData);
@@ -114,17 +145,21 @@ export function useMmdPipeline(
   const runBakeCamera = useCallback(
     async (vmdTarget: File | string) => {
       try {
-        playback.stopPlayback();
+        playback.resetTimeline();
+        baker.clearBakeData();
+        cameraDataRef.current = null;
+        setCameraDataState(null);
         setStatusType('analyzing');
         threeBridge.setViewMode?.('camera');
 
-        // 1. 先将角色模型载入 3D 画布，防止画面空白
-        await baker.loadCharacterModel(files.activePmxTarget, files.customExtraFiles);
-
-        // 2. 执行镜头解算并逐帧驱动相机
-        const result = await bakeCameraVmd(vmdTarget, (cam) => {
-          threeBridge.setCameraPose?.(cam.position, cam.quaternion, cam.fov);
-        });
+        const result = await baker.bakeCamera(
+          files.activePmxTarget,
+          vmdTarget,
+          files.customExtraFiles,
+          (cam) => {
+            threeBridge.setCameraPose?.(cam.position, cam.quaternion, cam.fov);
+          }
+        );
 
         cameraDataRef.current = result;
         setCameraDataState(result);

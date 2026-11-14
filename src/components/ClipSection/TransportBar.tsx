@@ -7,10 +7,17 @@ interface TransportBarProps {
   t: I18nTexts;
   timeline: TimelineController;
   exprState: ExpressionTracksController;
+  isCameraMode?: boolean;
   disabled: boolean;
 }
 
-export const TransportBar: React.FC<TransportBarProps> = ({ t, timeline, exprState, disabled }) => {
+export const TransportBar: React.FC<TransportBarProps> = ({
+  t,
+  timeline,
+  exprState,
+  isCameraMode = false,
+  disabled,
+}) => {
   const { maxFrames, fps, currentFrame, startFrame, endFrame, isPlaying, togglePlay, autoSnapLoopEnd } = timeline;
 
   return (
@@ -37,56 +44,58 @@ export const TransportBar: React.FC<TransportBarProps> = ({ t, timeline, exprSta
         </span>
       </div>
 
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => exprState.applyAutoBlink(startFrame, endFrame, fps)}
-          style={{
-            padding: '4px 8px',
-            borderRadius: 2,
-            border: '1px solid #d9d9d9',
-            background: '#ffffff',
-            color: '#374151',
-            fontSize: 11,
-            cursor: disabled ? 'not-allowed' : 'pointer',
-          }}
-        >
-          {t.exprAutoBlinkBtn}
-        </button>
-        <button
-          type="button"
-          disabled={disabled || exprState.tracks.length === 0}
-          onClick={exprState.clearAllTracks}
-          style={{
-            padding: '4px 8px',
-            borderRadius: 2,
-            border: '1px solid #d9d9d9',
-            background: '#ffffff',
-            color: '#dc2626',
-            fontSize: 11,
-            cursor: disabled || exprState.tracks.length === 0 ? 'not-allowed' : 'pointer',
-          }}
-        >
-          {t.exprClearAllBtn}
-        </button>
-        <button
-          onClick={autoSnapLoopEnd}
-          disabled={disabled}
-          style={{
-            fontSize: 11,
-            padding: '4px 10px',
-            background: '#ffffff',
-            color: '#1677ff',
-            border: '1px solid #1677ff',
-            borderRadius: 2,
-            cursor: disabled ? 'not-allowed' : 'pointer',
-            fontWeight: 600,
-          }}
-        >
-          {t.autoTrimLoop}
-        </button>
-      </div>
+      {!isCameraMode && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => exprState.applyAutoBlink(startFrame, endFrame, fps)}
+            style={{
+              padding: '4px 8px',
+              borderRadius: 2,
+              border: '1px solid #d9d9d9',
+              background: '#ffffff',
+              color: '#374151',
+              fontSize: 11,
+              cursor: disabled ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {t.exprAutoBlinkBtn}
+          </button>
+          <button
+            type="button"
+            disabled={disabled || exprState.tracks.length === 0}
+            onClick={exprState.clearAllTracks}
+            style={{
+              padding: '4px 8px',
+              borderRadius: 2,
+              border: '1px solid #d9d9d9',
+              background: '#ffffff',
+              color: '#dc2626',
+              fontSize: 11,
+              cursor: disabled || exprState.tracks.length === 0 ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {t.exprClearAllBtn}
+          </button>
+          <button
+            onClick={autoSnapLoopEnd}
+            disabled={disabled}
+            style={{
+              fontSize: 11,
+              padding: '4px 10px',
+              background: '#ffffff',
+              color: '#1677ff',
+              border: '1px solid #1677ff',
+              borderRadius: 2,
+              cursor: disabled ? 'not-allowed' : 'pointer',
+              fontWeight: 600,
+            }}
+          >
+            {t.autoTrimLoop}
+          </button>
+        </div>
+      )}
     </div>
   );
 };

@@ -186,6 +186,7 @@ export default function App() {
                 availableMorphs={pipeline.availableMorphs}
                 vmdExpressionTracks={pipeline.vmdExpressionTracks}
                 getFrameVmdExpressions={pipeline.getFrameVmdExpressions}
+                isCameraMode={pipeline.bakeTargetType === 'camera'}
                 disabled={pipeline.processing}
               />
             </div>

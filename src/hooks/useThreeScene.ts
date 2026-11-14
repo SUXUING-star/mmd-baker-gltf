@@ -95,30 +95,41 @@ export function useThreeScene(containerRef: React.RefObject<HTMLDivElement | nul
     };
   }, [containerRef]);
 
-  const setViewMode = useCallback((mode: ViewMode) => {
-    viewModeRef.current = mode;
-    setViewModeState(mode);
+  // 1. 修改 setViewMode（补充 updateProjectionMatrix）
+    const setViewMode = useCallback((mode: ViewMode) => {
+      viewModeRef.current = mode;
+      setViewModeState(mode);
 
-    if (controlsRef.current) {
-      controlsRef.current.enabled = mode === 'orbit';
-    }
-    if (cameraHelperRef.current) {
-      cameraHelperRef.current.visible = mode === 'orbit';
-    }
-    if (mode === 'orbit' && cameraRef.current && controlsRef.current) {
+      if (controlsRef.current) {
+        controlsRef.current.enabled = mode === 'orbit';
+      }
+      if (cameraHelperRef.current) {
+        cameraHelperRef.current.visible = mode === 'orbit';
+      }
+      if (mode === 'orbit' && cameraRef.current && controlsRef.current) {
+        cameraRef.current.fov = 45;
+        cameraRef.current.updateProjectionMatrix();
+        cameraRef.current.position.set(0, 10, 25);
+        controlsRef.current.target.set(0, 9, 0);
+        controlsRef.current.update();
+      }
+    }, []);
+
+  // 2. 修改 setMmdCamera（切回动作模式时强制关闭镜头框、恢复自由轨道与 fov=45）
+    const setMmdCamera = useCallback(() => {
+      if (!cameraRef.current || !controlsRef.current) return;
+      if (cameraHelperRef.current) {
+        cameraHelperRef.current.visible = false;
+      }
+      controlsRef.current.enabled = true;
       cameraRef.current.fov = 45;
+      cameraRef.current.updateProjectionMatrix();
       cameraRef.current.position.set(0, 10, 25);
       controlsRef.current.target.set(0, 9, 0);
       controlsRef.current.update();
-    }
-  }, []);
+    }, []);
 
-  const setMmdCamera = useCallback(() => {
-    if (!cameraRef.current || !controlsRef.current) return;
-    cameraRef.current.position.set(0, 10, 25);
-    controlsRef.current.target.set(0, 9, 0);
-    controlsRef.current.update();
-  }, []);
+
 
   const setCameraPose = useCallback(
     (
@@ -181,27 +192,30 @@ export function useThreeScene(containerRef: React.RefObject<HTMLDivElement | nul
     clearPoints();
   }, [clearPoints]);
 
-  const setupMmdAnimation = useCallback(
-    (mesh: THREE.SkinnedMesh, animation: THREE.AnimationClip) => {
-      clearCurrentMesh();
-      const scene = sceneRef.current;
-      if (!scene) return;
+  // 3. 修改 setupMmdAnimation（animation 改为可选，镜头模式不绑定旧动画 mixer）
+    const setupMmdAnimation = useCallback(
+      (mesh: THREE.SkinnedMesh, animation?: THREE.AnimationClip) => {
+        clearCurrentMesh();
+        const scene = sceneRef.current;
+        if (!scene) return;
 
-      scene.add(mesh);
-      currentMeshRef.current = mesh;
+        scene.add(mesh);
+        currentMeshRef.current = mesh;
 
-      restBonesRef.current = mesh.skeleton.bones.map((b) => ({
-        pos: b.position.clone(),
-        quat: b.quaternion.clone(),
-        scale: b.scale.clone(),
-      }));
+        restBonesRef.current = mesh.skeleton.bones.map((b) => ({
+          pos: b.position.clone(),
+          quat: b.quaternion.clone(),
+          scale: b.scale.clone(),
+        }));
 
-      const helper = new MMDAnimationHelper({ afterglow: 0, resetPhysicsOnLoop: false });
-      helper.add(mesh, { animation, physics: false, warmup: 0 });
-      mmdHelperRef.current = helper;
-    },
-    [clearCurrentMesh]
-  );
+        if (animation) {
+          const helper = new MMDAnimationHelper({ afterglow: 0, resetPhysicsOnLoop: false });
+          helper.add(mesh, { animation, physics: false, warmup: 0 });
+          mmdHelperRef.current = helper;
+        }
+      },
+      [clearCurrentMesh]
+    );
 
   const renderLandmarksPositions = useCallback((landmarks: Record<string, [number, number, number]>) => {
     const pointsGroup = pointsGroupRef.current;

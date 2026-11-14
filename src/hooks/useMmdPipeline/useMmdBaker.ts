@@ -1,7 +1,10 @@
 // src/hooks/useMmdPipeline/useMmdBaker.ts
 import { useCallback, useRef, useState } from 'react';
+import * as THREE from 'three';
+import { CameraAnimationData } from '../../solvers/cameraSolver';
 import { LandmarkData, ModelMorphInfo } from '../../types/types';
 import { bakePure3DLandmarks, BakerResult, loadPmxMeshOnly } from '../../utils/baker';
+import { bakeCameraVmd } from '../../utils/cameraBaker';
 import {
     analyzeVmdExpressions,
     VmdExpressionTrackSummary,
@@ -20,6 +23,13 @@ export function useMmdBaker(threeBridge: BakerThreeBridge) {
   const [vmdExpressionTracks, setVmdExpressionTracks] = useState<VmdExpressionTrackSummary[]>([]);
   const [progress, setProgress] = useState<number>(0);
   const [processing, setProcessing] = useState<boolean>(false);
+
+  const clearBakeData = useCallback(() => {
+    rawLandmarkDataRef.current = null;
+    setAvailableMorphs([]);
+    setVmdExpressionTracks([]);
+    setProgress(0);
+  }, []);
 
   const loadCharacterModel = useCallback(
     async (pmxTarget: File | string, extraFiles: File[]) => {
@@ -44,9 +54,7 @@ export function useMmdBaker(threeBridge: BakerThreeBridge) {
     ): Promise<BakerResult> => {
       try {
         setProcessing(true);
-        setProgress(0);
-        setAvailableMorphs([]);
-        setVmdExpressionTracks([]);
+        clearBakeData();
 
         threeBridge.setMmdCamera();
         threeBridge.clearCurrentMesh();
@@ -71,7 +79,33 @@ export function useMmdBaker(threeBridge: BakerThreeBridge) {
         setProcessing(false);
       }
     },
-    [threeBridge]
+    [threeBridge, clearBakeData]
+  );
+
+  const bakeCamera = useCallback(
+    async (
+      pmxTarget: File | string,
+      vmdTarget: File | string,
+      extraFiles: File[],
+      onFramePose?: (cam: THREE.PerspectiveCamera, prog: number) => void
+    ): Promise<CameraAnimationData> => {
+      try {
+        setProcessing(true);
+        clearBakeData();
+        threeBridge.clearCurrentMesh();
+
+        const mesh = await loadPmxMeshOnly(pmxTarget, extraFiles);
+        threeBridge.setupMmdAnimation(mesh);
+
+        return await bakeCameraVmd(vmdTarget, (cam, prog) => {
+          setProgress(prog);
+          onFramePose?.(cam, prog);
+        });
+      } finally {
+        setProcessing(false);
+      }
+    },
+    [threeBridge, clearBakeData]
   );
 
   const getFrameVmdExpressions = useCallback((frame: number): Record<string, number> => {
@@ -85,7 +119,9 @@ export function useMmdBaker(threeBridge: BakerThreeBridge) {
     getFrameVmdExpressions,
     progress,
     processing,
+    clearBakeData,
     loadCharacterModel,
     bake,
+    bakeCamera,
   };
 }

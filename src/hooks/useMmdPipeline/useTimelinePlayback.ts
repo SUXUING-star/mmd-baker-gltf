@@ -276,13 +276,29 @@ export function useTimelinePlayback(
     ]
   );
 
-  return {
-    timeline,
-    startFrame,
-    endFrame,
-    stopPlayback,
-    initAndPlay,
-    initAndPlayCamera,
-    applyLoopAndRefresh,
-  };
+  const resetTimeline = useCallback(() => {
+      stopPlayback();
+      fpsRef.current = 30;
+      currentFrameRef.current = 0;
+      startFrameRef.current = 0;
+      endFrameRef.current = 0;
+      setMaxFrames(0);
+      setFps(30);
+      setCurrentFrame(0);
+      setStartFrame(0);
+      setEndFrame(0);
+    }, [stopPlayback])
+
+  // 在最后的 return 中加上 resetTimeline：
+   return {
+     timeline,
+     startFrame,
+     endFrame,
+     stopPlayback,
+     resetTimeline,
+     initAndPlay,
+     initAndPlayCamera,
+     applyLoopAndRefresh,
+   };
+
 }
