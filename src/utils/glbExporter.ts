@@ -6,16 +6,11 @@ import {
     createHumanoidBoneHierarchy,
     exportSceneToBinaryGltf,
 } from './humanoidExportBase';
-import { DEFAULT_LOOP_OPTIONS, LoopBlendOptions } from './loopBlender';
 
-export async function exportFull52HumanoidGLB(
-  json: LandmarkData,
-  loopOptions: LoopBlendOptions = DEFAULT_LOOP_OPTIONS
-): Promise<Blob> {
+export async function exportFull52HumanoidGLB(json: LandmarkData): Promise<Blob> {
   const scene = new THREE.Scene();
   const bones = createHumanoidBoneHierarchy();
 
-  // 绑定虚拟蒙皮，通过 GLTF Validator 校验
   const boneArray = HUMANOID_BONES.map((n) => bones[n]);
   const skeleton = new THREE.Skeleton(boneArray);
   const dummyGeometry = new THREE.BoxGeometry(0.1, 0.1, 0.1);
@@ -39,7 +34,7 @@ export async function exportFull52HumanoidGLB(
   skinnedMesh.bind(skeleton);
   scene.add(skinnedMesh);
 
-  const clip = buildHumanoidAnimationClip(json, 'MMD_Pointcloud_Pure_Solved', loopOptions);
+  const clip = buildHumanoidAnimationClip(json, 'MMD_Pointcloud_Pure_Solved');
 
   return exportSceneToBinaryGltf(scene, clip);
 }

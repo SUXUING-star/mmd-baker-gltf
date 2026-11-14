@@ -7,24 +7,15 @@ import { ensureQuatContinuity, getV, hasBone } from '../solvers/mathUtils';
 import { solveSpine } from '../solvers/spineSolver';
 import { StandardBone } from '../types/boneMapping';
 import { HUMANOID_BONES, HumanoidBoneName, LandmarkData } from '../types/types';
-import { applyLoopToLandmarkData, DEFAULT_LOOP_OPTIONS, LoopBlendOptions } from './loopBlender';
 
-export function solveAllHumanoidQuaternions(
-  data: LandmarkData,
-  loopOptions: LoopBlendOptions = DEFAULT_LOOP_OPTIONS
-) {
-  // 1. 先在 3D Landmark 级别执行真实的补帧/插帧扩充
-  const effectiveData = loopOptions.enabled
-    ? applyLoopToLandmarkData(data, loopOptions)
-    : data;
-
-  const { frames } = effectiveData;
+export function solveAllHumanoidQuaternions(data: LandmarkData) {
+  const { frames } = data;
   if (frames.length === 0) {
     return { times: [], hipsPositions: [], quatTracksData: {} as any };
   }
 
   const f0 = frames[0].landmarks;
-  const restLm = effectiveData.restLandmarks;
+  const restLm = data.restLandmarks;
 
   const pPelvis0 = hasBone(f0, StandardBone.Hips)
     ? getV(f0, StandardBone.Hips)
@@ -45,7 +36,6 @@ export function solveAllHumanoidQuaternions(
   HUMANOID_BONES.forEach((k) => (quatTracksData[k] = []));
   const prevQuats: Partial<Record<HumanoidBoneName, THREE.Quaternion>> = {};
 
-  // 2. 对包含插帧在内的所有帧重新跑完整的 IK/FK 数学解算
   for (let f = 0; f < frames.length; f++) {
     const frame = frames[f];
     const lm = frame.landmarks;
@@ -84,7 +74,7 @@ export function solveAllHumanoidQuaternions(
     });
   }
 
-  // 5 点高斯滤波平滑：hipsPositions X / Y / Z 全轴
+  // 5 点高斯滤波平滑：hipsPositions
   const frameCount = times.length;
   if (frameCount > 4) {
     for (let axis = 0; axis < 3; axis++) {

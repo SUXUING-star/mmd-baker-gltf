@@ -25,9 +25,6 @@ function calculatePoseDistance(frameA: LandmarkFrame, frameB: LandmarkFrame): nu
 
 /**
  * 自动寻找最适合循环的尾帧下标
- * @param landmarkData 烘焙出的全量姿态数据
- * @param startFrameIndex 起始参考帧，默认第 0 帧
- * @param minGapFrames 忽略的最少帧数（避免选到刚开始的微小变动，默认 30 帧即 1 秒）
  */
 export function findBestLoopEndFrame(
   landmarkData: LandmarkData,
@@ -50,7 +47,6 @@ export function findBestLoopEndFrame(
   let minDistance = Infinity;
   let bestFrameIndex = totalFrames - 1;
 
-  // 在候选区间内寻找姿态最相似（欧氏距离误差最小）的帧
   for (let i = startFrameIndex + minGapFrames; i < totalFrames; i++) {
     const dist = calculatePoseDistance(refFrame, frames[i]);
     if (dist < minDistance) {
@@ -80,19 +76,18 @@ export function trimLandmarkData(
   const slicedFrames = landmarkData.frames.slice(safeStart, safeEnd + 1);
   const baseTime = slicedFrames[0]?.time ?? 0;
 
-  // 将裁剪后的帧时间归零重置，同时保留 expressions 等帧数据
-    const normalizedFrames: LandmarkFrame[] = slicedFrames.map((f) => ({
-      ...f,
-      time: Number((f.time - baseTime).toFixed(3)),
-    }));
+  const normalizedFrames: LandmarkFrame[] = slicedFrames.map((f) => ({
+    ...f,
+    time: Number((f.time - baseTime).toFixed(3)),
+  }));
 
-    const totalFrames = normalizedFrames.length;
-    const duration = totalFrames > 0 ? normalizedFrames[totalFrames - 1].time : 0;
+  const totalFrames = normalizedFrames.length;
+  const duration = totalFrames > 0 ? normalizedFrames[totalFrames - 1].time : 0;
 
-    return {
-      ...landmarkData,
-      totalFrames,
-      duration,
-      frames: normalizedFrames,
-    };
+  return {
+    ...landmarkData,
+    totalFrames,
+    duration,
+    frames: normalizedFrames,
+  };
 }

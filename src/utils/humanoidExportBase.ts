@@ -3,7 +3,6 @@ import * as THREE from 'three';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 import { isPresetExpression } from '../types/expressionMapping';
 import { HUMANOID_BONES, HumanoidBoneName, LandmarkData } from '../types/types';
-import { DEFAULT_LOOP_OPTIONS, LoopBlendOptions } from './loopBlender';
 import { solveAllHumanoidQuaternions } from './mathSolver';
 
 export interface ExpressionNodeBinding {
@@ -12,9 +11,6 @@ export interface ExpressionNodeBinding {
   isPreset: boolean;
 }
 
-/**
- * 构建符合 VRM 1.0 / Humanoid 规范的 52 根 T-Pose 骨骼与父子层级
- */
 export function createHumanoidBoneHierarchy(): Record<HumanoidBoneName, THREE.Bone> {
   const bones: Record<HumanoidBoneName, THREE.Bone> = {} as Record<HumanoidBoneName, THREE.Bone>;
 
@@ -23,7 +19,6 @@ export function createHumanoidBoneHierarchy(): Record<HumanoidBoneName, THREE.Bo
     bones[name].name = name;
   });
 
-  // T-Pose 骨骼基准局部偏移
   bones.hips.position.set(0, 0.95, 0);
   bones.spine.position.set(0, 0.12, 0);
   bones.chest.position.set(0, 0.14, 0);
@@ -51,14 +46,12 @@ export function createHumanoidBoneHierarchy(): Record<HumanoidBoneName, THREE.Bo
   bones.rightFoot.position.set(0, -0.40, 0);
   bones.rightToes.position.set(0, -0.05, 0.14);
 
-  // 躯干与头部
   bones.hips.add(bones.spine);
   bones.spine.add(bones.chest);
   bones.chest.add(bones.upperChest);
   bones.upperChest.add(bones.neck);
   bones.neck.add(bones.head);
 
-  // 双腿
   bones.hips.add(bones.leftUpperLeg);
   bones.leftUpperLeg.add(bones.leftLowerLeg);
   bones.leftLowerLeg.add(bones.leftFoot);
@@ -69,7 +62,6 @@ export function createHumanoidBoneHierarchy(): Record<HumanoidBoneName, THREE.Bo
   bones.rightLowerLeg.add(bones.rightFoot);
   bones.rightFoot.add(bones.rightToes);
 
-  // 双臂
   bones.upperChest.add(bones.leftShoulder);
   bones.leftShoulder.add(bones.leftUpperArm);
   bones.leftUpperArm.add(bones.leftLowerArm);
@@ -80,7 +72,6 @@ export function createHumanoidBoneHierarchy(): Record<HumanoidBoneName, THREE.Bo
   bones.rightUpperArm.add(bones.rightLowerArm);
   bones.rightLowerArm.add(bones.rightHand);
 
-  // 手指 30 节骨骼
   const fingerList = HUMANOID_BONES.filter(
     (b) => b.includes('Thumb') || b.includes('Index') || b.includes('Middle') || b.includes('Ring') || b.includes('Little')
   );
@@ -121,15 +112,11 @@ export function createHumanoidBoneHierarchy(): Record<HumanoidBoneName, THREE.Bo
   return bones;
 }
 
-/**
- * 求解全部 52 根骨骼四元数并构建 AnimationClip，同时返回时间轴数组供表情轨道复用
- */
 export function buildHumanoidAnimationClipWithTimes(
   json: LandmarkData,
-  clipName: string,
-  loopOptions: LoopBlendOptions = DEFAULT_LOOP_OPTIONS
+  clipName: string
 ): { clip: THREE.AnimationClip; times: number[] } {
-  const { times, hipsPositions, quatTracksData } = solveAllHumanoidQuaternions(json, loopOptions);
+  const { times, hipsPositions, quatTracksData } = solveAllHumanoidQuaternions(json);
 
   const tracks: THREE.KeyframeTrack[] = [
     new THREE.VectorKeyframeTrack('hips.position', times, hipsPositions),
@@ -143,80 +130,48 @@ export function buildHumanoidAnimationClipWithTimes(
   };
 }
 
-/**
- * 求解全部 52 根骨骼四元数并构建 AnimationClip
- */
 export function buildHumanoidAnimationClip(
   json: LandmarkData,
-  clipName: string,
-  loopOptions: LoopBlendOptions = DEFAULT_LOOP_OPTIONS
+  clipName: string
 ): THREE.AnimationClip {
-  return buildHumanoidAnimationClipWithTimes(json, clipName, loopOptions).clip;
+  return buildHumanoidAnimationClipWithTimes(json, clipName).clip;
 }
 
-/**
- * 为存在有效动画的表情创建 VRMA 节点与 position.x 权重轨道
- */
- export function buildVrmaExpressionTracks(
-   json: LandmarkData,
-   times: number[],
-   loopOptions: LoopBlendOptions = DEFAULT_LOOP_OPTIONS,
-   presetOnly: boolean = true
- ): {
-   bindings: ExpressionNodeBinding[];
-   tracks: THREE.KeyframeTrack[];
- } {
-   const frames = json.frames;
-   if (!frames.length || times.length !== frames.length) {
-     return { bindings: [], tracks: [] };
-   }
+export function buildVrmaExpressionTracks(
+  json: LandmarkData,
+  times: number[],
+  presetOnly: boolean = true
+): {
+  bindings: ExpressionNodeBinding[];
+  tracks: THREE.KeyframeTrack[];
+} {
+  const frames = json.frames;
+  if (!frames.length || times.length !== frames.length) {
+    return { bindings: [], tracks: [] };
+  }
 
-   // 只收集有非零权重的表情（默认只导出 VRM 标准 preset）
-   const activeNames = new Set<string>();
-   for (const frame of frames) {
-     if (!frame.expressions) continue;
-     for (const [name, weight] of Object.entries(frame.expressions)) {
-       if (weight > 1e-4 && (!presetOnly || isPresetExpression(name))) {
-         activeNames.add(name);
-       }
-     }
-   }
+  const activeNames = new Set<string>();
+  for (const frame of frames) {
+    if (!frame.expressions) continue;
+    for (const [name, weight] of Object.entries(frame.expressions)) {
+      if (weight > 1e-4 && (!presetOnly || isPresetExpression(name))) {
+        activeNames.add(name);
+      }
+    }
+  }
 
   const bindings: ExpressionNodeBinding[] = [];
   const tracks: THREE.KeyframeTrack[] = [];
-  const fps = json.fps || 30;
   const totalFrames = frames.length;
 
   Array.from(activeNames).forEach((exprName, idx) => {
-    // 节点名使用纯 ASCII 安全字符，避免含 "." / "[" / "]" 等的日文 Morph 名破坏 Three.js PropertyBinding
     const node = new THREE.Object3D();
     node.name = `vrma_expr_${idx}`;
 
     const positions = new Float32Array(totalFrames * 3);
-    const startVal = frames[0].expressions?.[exprName] ?? 0;
-    const endVal = frames[totalFrames - 1].expressions?.[exprName] ?? 0;
 
     for (let i = 0; i < totalFrames; i++) {
-      let w = frames[i].expressions?.[exprName] ?? 0;
-
-      if (loopOptions.enabled && totalFrames > 1) {
-        if (loopOptions.mode === 'idle') {
-          const u = i / (totalFrames - 1);
-          const blendWeight = 0.5 * (1 - Math.cos(Math.PI * u));
-          w = w + (startVal - endVal) * blendWeight;
-        } else if (loopOptions.mode === 'tail') {
-          const blendSec = Math.min(loopOptions.blendDuration, (totalFrames / fps) * 0.45);
-          const blendFrames = Math.max(2, Math.round(blendSec * fps));
-          const blendStart = totalFrames - blendFrames;
-          if (i >= blendStart) {
-            const localU = (i - blendStart + 1) / blendFrames;
-            const blendWeight = 0.5 * (1 - Math.cos(Math.PI * localU));
-            w = w * (1 - blendWeight) + startVal * blendWeight;
-          }
-        }
-      }
-
-      // VRMA 规范要求 weight 位于 [0, 1]，写入平移动画的 X 分量
+      const w = frames[i].expressions?.[exprName] ?? 0;
       positions[i * 3 + 0] = Math.max(0, Math.min(1, w));
       positions[i * 3 + 1] = 0;
       positions[i * 3 + 2] = 0;
@@ -233,9 +188,6 @@ export function buildHumanoidAnimationClip(
   return { bindings, tracks };
 }
 
-/**
- * 通用 GLTF/GLB 二进制导出封装，允许传入插件注册回调
- */
 export function exportSceneToBinaryGltf(
   scene: THREE.Scene,
   clip: THREE.AnimationClip,

@@ -1,5 +1,5 @@
 // src/hooks/useMmdPipeline/useMotionExporter.ts
-import { RefObject, useCallback, useRef, useState } from 'react';
+import { RefObject, useCallback, useState } from 'react';
 import { I18nTexts } from '../../i18n';
 import { LandmarkData } from '../../types/types';
 import {
@@ -7,7 +7,6 @@ import {
     mergeExpressionTracksIntoLandmarkData,
 } from '../../utils/expressionTrackEvaluator';
 import { exportFull52HumanoidGLB } from '../../utils/glbExporter';
-import { LoopBlendOptions } from '../../utils/loopBlender';
 import { trimLandmarkData } from '../../utils/motionTrimmer';
 import { exportFull52VRMA, VrmaMetaOptions } from '../../utils/vrmaExporter';
 
@@ -25,7 +24,6 @@ function triggerBrowserDownload(blob: Blob, filename: string) {
 interface MotionExporterDeps {
   rawLandmarkDataRef: RefObject<LandmarkData | null>;
   expressionTracks: ExpressionTrack[];
-  loopOptions: LoopBlendOptions;
   startFrame: number;
   endFrame: number;
   getBaseFilename: () => string;
@@ -35,19 +33,12 @@ interface MotionExporterDeps {
 export function useMotionExporter({
   rawLandmarkDataRef,
   expressionTracks,
-  loopOptions,
   startFrame,
   endFrame,
   getBaseFilename,
   t,
 }: MotionExporterDeps) {
   const [exportingType, setExportingType] = useState<string | null>(null);
-
-  const loopOptionsRef = useRef(loopOptions);
-  loopOptionsRef.current = loopOptions;
-
-  const expressionTracksRef = useRef(expressionTracks);
-  expressionTracksRef.current = expressionTracks;
 
   const runExport = useCallback(
     async (format: 'vrma' | 'glb', buildBlob: (trimmed: LandmarkData) => Promise<Blob>) => {
@@ -56,8 +47,9 @@ export function useMotionExporter({
         setExportingType(format);
         const withExpressions = mergeExpressionTracksIntoLandmarkData(
           rawLandmarkDataRef.current,
-          expressionTracksRef.current
+          expressionTracks
         );
+        // 此处为全流唯一的 Trimming 裁切出口！
         const trimmed = trimLandmarkData(withExpressions, startFrame, endFrame);
         const blob = await buildBlob(trimmed);
         triggerBrowserDownload(blob, `${getBaseFilename()}_[${startFrame}-${endFrame}].${format}`);
@@ -70,28 +62,24 @@ export function useMotionExporter({
         setExportingType(null);
       }
     },
-    [rawLandmarkDataRef, startFrame, endFrame, getBaseFilename, t]
+    [rawLandmarkDataRef, expressionTracks, startFrame, endFrame, getBaseFilename, t]
   );
 
   const downloadVrma = useCallback(
     (metaOptions?: VrmaMetaOptions) =>
       runExport('vrma', (trimmed) =>
-        exportFull52VRMA(
-          trimmed,
-          {
-            title: metaOptions?.title || getBaseFilename(),
-            authors: metaOptions?.authors,
-            copyrightInformation: metaOptions?.copyrightInformation,
-            licenseUrl: metaOptions?.licenseUrl,
-          },
-          loopOptionsRef.current
-        )
+        exportFull52VRMA(trimmed, {
+          title: metaOptions?.title || getBaseFilename(),
+          authors: metaOptions?.authors,
+          copyrightInformation: metaOptions?.copyrightInformation,
+          licenseUrl: metaOptions?.licenseUrl,
+        })
       ),
     [runExport, getBaseFilename]
   );
 
   const downloadGlb = useCallback(
-    () => runExport('glb', (trimmed) => exportFull52HumanoidGLB(trimmed, loopOptionsRef.current)),
+    () => runExport('glb', (trimmed) => exportFull52HumanoidGLB(trimmed)),
     [runExport]
   );
 

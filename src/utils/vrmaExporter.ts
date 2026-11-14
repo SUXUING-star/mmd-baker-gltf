@@ -3,14 +3,12 @@ import type { VRMCVRMAnimation } from '@pixiv/types-vrmc-vrm-animation-1.0';
 import * as THREE from 'three';
 import { HUMANOID_BONES, LandmarkData } from '../types/types';
 import {
-  buildHumanoidAnimationClipWithTimes,
-  buildVrmaExpressionTracks,
-  createHumanoidBoneHierarchy,
-  exportSceneToBinaryGltf,
+    buildHumanoidAnimationClipWithTimes,
+    buildVrmaExpressionTracks,
+    createHumanoidBoneHierarchy,
+    exportSceneToBinaryGltf,
 } from './humanoidExportBase';
-import { DEFAULT_LOOP_OPTIONS, LoopBlendOptions } from './loopBlender';
 
-/** VRMA 元数据配置接口 */
 export interface VrmaMetaOptions {
   title?: string;
   authors?: string[];
@@ -18,20 +16,16 @@ export interface VrmaMetaOptions {
   licenseUrl?: string;
 }
 
-/**
- * 导出符合 Pixiv 官方 VRMC_vrm_animation 1.0 规范的纯动作文件 (.vrma，含骨骼 + 表情)
- */
 export async function exportFull52VRMA(
   json: LandmarkData,
-  metaOptions?: VrmaMetaOptions,
-  loopOptions: LoopBlendOptions = DEFAULT_LOOP_OPTIONS
+  metaOptions?: VrmaMetaOptions
 ): Promise<Blob> {
   const scene = new THREE.Scene();
   const bones = createHumanoidBoneHierarchy();
   scene.add(bones.hips);
 
-  const { clip, times } = buildHumanoidAnimationClipWithTimes(json, 'VRMAnimation', loopOptions);
-  const { bindings: exprBindings, tracks: exprTracks } = buildVrmaExpressionTracks(json, times, loopOptions);
+  const { clip, times } = buildHumanoidAnimationClipWithTimes(json, 'VRMAnimation');
+  const { bindings: exprBindings, tracks: exprTracks } = buildVrmaExpressionTracks(json, times);
 
   exprBindings.forEach((b) => scene.add(b.node));
   if (exprTracks.length > 0) {
@@ -99,8 +93,6 @@ export async function exportFull52VRMA(
         if (!gltfJson.extensionsUsed.includes('VRMC_vrm_animation')) {
           gltfJson.extensionsUsed.push('VRMC_vrm_animation');
         }
-
-
       },
     }));
   });

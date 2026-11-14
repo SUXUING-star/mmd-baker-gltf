@@ -5,7 +5,6 @@ import { CameraAnimationData } from '../../solvers/cameraSolver';
 import { LandmarkData, ModelMorphInfo } from '../../types/types';
 import { exportCameraGLB, exportCameraVRMA } from '../../utils/cameraExporter';
 import { ExpressionTrack } from '../../utils/expressionTrackEvaluator';
-import { applyLoopToLandmarkData, DEFAULT_LOOP_OPTIONS, LoopBlendOptions } from '../../utils/loopBlender';
 import { VmdExpressionTrackSummary } from '../../utils/vmdExpressionAnalyzer';
 import { VrmaMetaOptions } from '../../utils/vrmaExporter';
 import { useMmdBaker } from './useMmdBaker';
@@ -45,7 +44,6 @@ export interface MmdPipeline {
   downloadCameraVrma: (metaOptions?: VrmaMetaOptions) => Promise<void>;
   downloadCameraGlb: () => Promise<void>;
   downloadBoth: (metaOptions?: VrmaMetaOptions) => Promise<void>;
-  applyLoopAndRefresh: (newOptions?: LoopBlendOptions) => void;
   vmdExpressionTracks: VmdExpressionTrackSummary[];
   getFrameVmdExpressions: (frame: number) => Record<string, number>;
 }
@@ -55,7 +53,6 @@ export function useMmdPipeline(
   defaultPmxPath: string,
   defaultVmdPath: string,
   lang: Lang = 'zh',
-  loopOptions: LoopBlendOptions = DEFAULT_LOOP_OPTIONS,
   expressionTracks: ExpressionTrack[] = []
 ): MmdPipeline {
   const t = useMemo(() => I18N[lang], [lang]);
@@ -82,7 +79,6 @@ export function useMmdPipeline(
   const exporter = useMotionExporter({
     rawLandmarkDataRef: activeLandmarkDataRef,
     expressionTracks,
-    loopOptions,
     startFrame: playback.startFrame,
     endFrame: playback.endFrame,
     getBaseFilename: files.getBaseFilename,
@@ -119,17 +115,6 @@ export function useMmdPipeline(
     [bakeTargetType, clearAllBakedState]
   );
 
-  const applyLoopAndRefresh = useCallback(
-    (newOptions?: LoopBlendOptions) => {
-      if (!baker.rawLandmarkDataRef.current) return;
-      const opts = newOptions || loopOptions;
-      const effective = applyLoopToLandmarkData(baker.rawLandmarkDataRef.current, opts);
-      activeLandmarkDataRef.current = effective;
-      playback.updateTimelineData(effective);
-    },
-    [baker.rawLandmarkDataRef, loopOptions, playback]
-  );
-
   const runBakeMotion = useCallback(
     async (pmxTarget: File | string, vmdTarget: File | string, extraFiles: File[]) => {
       try {
@@ -139,20 +124,17 @@ export function useMmdPipeline(
         setStatusType('analyzing');
 
         const { landmarkData } = await baker.bake(pmxTarget, vmdTarget, extraFiles);
-
-        // 应用初始 loop 选项扩充插帧数据
-        const effective = applyLoopToLandmarkData(landmarkData, loopOptions);
-        activeLandmarkDataRef.current = effective;
+        activeLandmarkDataRef.current = landmarkData;
 
         setStatusType('ready_to_export');
-        playback.initAndPlay(effective);
+        playback.initAndPlay(landmarkData);
       } catch (err: unknown) {
         console.error(err);
         setStatusType('error');
         setErrorMessage(err instanceof Error ? err.message : String(err));
       }
     },
-    [playback, baker, loopOptions]
+    [playback, baker]
   );
 
   const runBakeCamera = useCallback(
@@ -312,7 +294,6 @@ export function useMmdPipeline(
     downloadCameraVrma,
     downloadCameraGlb,
     downloadBoth,
-    applyLoopAndRefresh,
     vmdExpressionTracks: baker.vmdExpressionTracks,
     getFrameVmdExpressions: baker.getFrameVmdExpressions,
   };
