@@ -2,7 +2,7 @@
 export type Lang = 'zh' | 'en' | 'ja';
 
 const zh = {
-  title: 'MMD 动作转 Humanoid / VRMA 动捕解算器',
+  title: 'MMD 动作与镜头解算器',
   statusLabel: '当前状态：',
   baseModel: '基准模型',
   defaultModelName: '默认模型 (甘雨.pmx)',
@@ -17,6 +17,18 @@ const zh = {
   vmdLoaded: (name: string) => `已载入: ${name}`,
   vmdPlaceholder: '点击或拖入 .vmd 动作文件',
   vmdHint: '载入后点击开始烘焙解算骨骼',
+  // 烘焙模式与视角
+  bakeModeLabel: '解算类型选择',
+  bakeModeMotion: '角色动作解算',
+  bakeModeCamera: '镜头动画解算',
+  viewModeCamera: '镜头视角',
+  viewModeOrbit: '自由视角',
+  startBakeCameraBtn: '开始烘焙解算镜头',
+  reBakeCameraBtn: '重新烘焙镜头',
+  bakingCameraProgress: (p: number) => `正在解算镜头轨 (${p}%)...`,
+  cameraVmdPlaceholder: '点击或拖入 .vmd 镜头动作文件',
+  downloadCameraVrma: '导出相机 VRMA (.vrma)',
+  downloadCameraGlb: '导出相机 GLB (.glb)',
   // 烘焙控制主按钮
   startBakeBtn: '开始烘焙解算骨骼',
   reBakeBtn: '重新烘焙解算',
@@ -102,7 +114,7 @@ const zh = {
   metaLicensePlaceholder: '例: https://vrm.dev/licenses/1.0/',
   // 状态文案
   statusReady: '就绪：请点击【开始烘焙解算】',
-  statusAnalyzing: '正在解析动作并提取 3D 骨骼...',
+  statusAnalyzing: '正在解析数据...',
   statusReadyToExport: '烘焙完成，可随时导出',
   statusSolvingHumanoid: '正在导出文件...',
   statusError: (msg: string) => `解算失败: ${msg}`,
@@ -111,7 +123,7 @@ const zh = {
 export type I18nTexts = typeof zh;
 
 const en: I18nTexts = {
-  title: 'MMD Motion to Humanoid / VRMA MoCap Solver',
+  title: 'MMD Motion & Camera Solver',
   statusLabel: 'Status: ',
   baseModel: 'Base Model',
   defaultModelName: 'Default (Ganyu.pmx)',
@@ -126,6 +138,18 @@ const en: I18nTexts = {
   vmdLoaded: (name: string) => `Loaded: ${name}`,
   vmdPlaceholder: 'Click or drop .vmd file here',
   vmdHint: 'Drop file and click Start Bake',
+  // Bake Mode & Views
+  bakeModeLabel: 'Solver Mode',
+  bakeModeMotion: 'Character Motion',
+  bakeModeCamera: 'Camera Motion',
+  viewModeCamera: 'Camera View',
+  viewModeOrbit: 'Orbit View',
+  startBakeCameraBtn: 'Start Bake Camera',
+  reBakeCameraBtn: 'Re-Bake Camera',
+  bakingCameraProgress: (p: number) => `Baking Camera (${p}%)...`,
+  cameraVmdPlaceholder: 'Click or drop camera .vmd file',
+  downloadCameraVrma: 'Export Camera VRMA (.vrma)',
+  downloadCameraGlb: 'Export Camera GLB (.glb)',
   // Baking main button
   startBakeBtn: 'Start Bake Motion',
   reBakeBtn: 'Re-Bake Motion',
@@ -211,14 +235,14 @@ const en: I18nTexts = {
   metaLicensePlaceholder: 'e.g. https://vrm.dev/licenses/1.0/',
   // Status
   statusReady: 'Ready: Click [Start Bake]',
-  statusAnalyzing: 'Baking MMD keyframes...',
+  statusAnalyzing: 'Parsing data...',
   statusReadyToExport: 'Bake complete, ready to export',
   statusSolvingHumanoid: 'Exporting...',
   statusError: (msg: string) => `Error: ${msg}`,
 };
 
 const ja: I18nTexts = {
-  title: 'MMD モーション → Humanoid / VRMA ソルバー',
+  title: 'MMD モーション / カメラ ソルバー',
   statusLabel: 'ステータス：',
   baseModel: 'ベースモデル',
   defaultModelName: 'デフォルト (甘雨.pmx)',
@@ -228,11 +252,23 @@ const ja: I18nTexts = {
   customBadge: 'カスタム',
   resetDefaultModel: 'リセット',
   pmxAlert: '有効な .pmx ファイルが見つかりません',
-  pmxDropHint: '.pmx またはフォルダをドロップ',
+  pmxDropHint: '.pmx 或者フォルダをドロップ',
   vmdAlert: '有効な .vmd ファイルを選択してください',
   vmdLoaded: (name: string) => `読込済: ${name}`,
   vmdPlaceholder: 'クリックまたは .vmd をドロップ',
   vmdHint: '読込後にベイク開始をクリック',
+  // Bake Mode & Views
+  bakeModeLabel: '解算モード選択',
+  bakeModeMotion: 'モーション解算',
+  bakeModeCamera: 'カメラ解算',
+  viewModeCamera: 'カメラ视角',
+  viewModeOrbit: '自由视角',
+  startBakeCameraBtn: 'カメラベイク開始',
+  reBakeCameraBtn: 'カメラ再ベイク',
+  bakingCameraProgress: (p: number) => `カメラベイク中 (${p}%)...`,
+  cameraVmdPlaceholder: 'クリックまたはカメラ .vmd をドロップ',
+  downloadCameraVrma: 'カメラ VRMA 出力 (.vrma)',
+  downloadCameraGlb: 'カメラ GLB 出力 (.glb)',
   // ベイク操作ボタン
   startBakeBtn: 'ベイク解算を開始',
   reBakeBtn: '再ベイク解算',
@@ -251,7 +287,7 @@ const ja: I18nTexts = {
   play: '再生',
   pause: '一時停止',
   autoTrimLoop: 'ループ終端調整',
-  currentFrameLabel: '現在フレーム',
+  currentFrameLabel: '现在フレーム',
   startFrameLabel: '開始',
   endFrameLabel: '終了',
   trimmedDurationLabel: (sec: string, frames: number) => `区間: ${sec} 秒 (${frames} フレーム)`,
@@ -318,7 +354,7 @@ const ja: I18nTexts = {
   metaLicensePlaceholder: '例: https://vrm.dev/licenses/1.0/',
   // ステータス
   statusReady: '準備完了：【ベイク開始】を押してください',
-  statusAnalyzing: '3D ボーンを抽出中...',
+  statusAnalyzing: '解析中...',
   statusReadyToExport: 'ベイク完了、出力可能',
   statusSolvingHumanoid: '出力中...',
   statusError: (msg: string) => `エラー: ${msg}`,

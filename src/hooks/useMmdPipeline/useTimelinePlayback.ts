@@ -1,5 +1,6 @@
 // src/hooks/useMmdPipeline/useTimelinePlayback.ts
 import { RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { CameraAnimationData } from '../../solvers/cameraSolver';
 import { LandmarkData } from '../../types/types';
 import { ExpressionTrack } from '../../utils/expressionTrackEvaluator';
 import { LoopBlendOptions } from '../../utils/loopBlender';
@@ -27,13 +28,19 @@ export interface TimelineThreeBridge {
     blendTarget?: { startTime: number; weight: number },
     expressionsOverride?: Record<string, number>
   ) => void;
+  setCameraPose?: (
+    pos: THREE.Vector3 | [number, number, number],
+    quat: THREE.Quaternion | [number, number, number, number],
+    fov?: number
+  ) => void;
 }
 
 export function useTimelinePlayback(
   rawLandmarkDataRef: RefObject<LandmarkData | null>,
   threeBridge: TimelineThreeBridge,
   loopOptions: LoopBlendOptions,
-  expressionTracks: ExpressionTrack[]
+  expressionTracks: ExpressionTrack[],
+  cameraDataRef?: RefObject<CameraAnimationData | null>
 ) {
   const [maxFrames, setMaxFrames] = useState<number>(0);
   const [fps, setFps] = useState<number>(30);
@@ -49,7 +56,6 @@ export function useTimelinePlayback(
   const endFrameRef = useRef<number>(0);
   const isPlayingRef = useRef<boolean>(false);
 
-  // 仅同步外部传入的配置/引用，绝不在渲染体中回写播放游标和区间 state
   const threeBridgeRef = useRef(threeBridge);
   threeBridgeRef.current = threeBridge;
 
@@ -73,6 +79,15 @@ export function useTimelinePlayback(
 
   const renderFrame = useCallback(
     (frameIdx: number) => {
+      // 1. 如果存在解算好的相机数据，同步渲染相机帧
+      if (cameraDataRef?.current && threeBridgeRef.current.setCameraPose) {
+        const camFrame = cameraDataRef.current.frames[frameIdx];
+        if (camFrame) {
+          threeBridgeRef.current.setCameraPose(camFrame.position, camFrame.quaternion, camFrame.fov);
+        }
+      }
+
+      // 2. 如果存在角色骨骼数据，渲染骨骼姿态
       const data = rawLandmarkDataRef.current;
       if (!data) return;
 
@@ -94,32 +109,36 @@ export function useTimelinePlayback(
         result.expressionsOverride
       );
     },
-    [rawLandmarkDataRef]
+    [rawLandmarkDataRef, cameraDataRef]
   );
 
-  // 仅在表情轨实际变化且处于暂停状态时刷新当前帧
   useEffect(() => {
     expressionTracksRef.current = expressionTracks;
-    if (!isPlayingRef.current && rawLandmarkDataRef.current) {
+    if (!isPlayingRef.current && (rawLandmarkDataRef.current || cameraDataRef?.current)) {
       renderFrame(currentFrameRef.current);
     }
-  }, [expressionTracks, rawLandmarkDataRef, renderFrame]);
+  }, [expressionTracks, rawLandmarkDataRef, cameraDataRef, renderFrame]);
 
   const seekToFrame = useCallback(
     (frameIdx: number) => {
-      const data = rawLandmarkDataRef.current;
-      if (!data) return;
-      const safeIdx = Math.max(0, Math.min(frameIdx, data.frames.length - 1));
+      const totalLen =
+        rawLandmarkDataRef.current?.frames.length ||
+        cameraDataRef?.current?.frames.length ||
+        0;
+      if (totalLen === 0) return;
+
+      const safeIdx = Math.max(0, Math.min(frameIdx, totalLen - 1));
       currentFrameRef.current = safeIdx;
       setCurrentFrame(safeIdx);
       renderFrame(safeIdx);
     },
-    [rawLandmarkDataRef, renderFrame]
+    [rawLandmarkDataRef, cameraDataRef, renderFrame]
   );
 
   const startPlayback = useCallback(
     (initialFrame?: number) => {
-      if (!rawLandmarkDataRef.current || endFrameRef.current <= startFrameRef.current) return;
+      const hasData = !!rawLandmarkDataRef.current || !!cameraDataRef?.current;
+      if (!hasData || endFrameRef.current <= startFrameRef.current) return;
 
       stopPlayback();
       if (initialFrame !== undefined) {
@@ -144,7 +163,7 @@ export function useTimelinePlayback(
         renderFrame(next);
       }, intervalMs);
     },
-    [rawLandmarkDataRef, renderFrame, stopPlayback]
+    [rawLandmarkDataRef, cameraDataRef, renderFrame, stopPlayback]
   );
 
   const togglePlay = useCallback(() => {
@@ -167,6 +186,25 @@ export function useTimelinePlayback(
 
       setMaxFrames(total);
       setFps(landmarkData.fps);
+      setStartFrame(0);
+      setEndFrame(defaultEnd);
+
+      startPlayback(0);
+    },
+    [startPlayback]
+  );
+
+  const initAndPlayCamera = useCallback(
+    (camData: CameraAnimationData) => {
+      const total = camData.totalFrames;
+      const defaultEnd = Math.max(0, total - 1);
+
+      fpsRef.current = camData.fps;
+      startFrameRef.current = 0;
+      endFrameRef.current = defaultEnd;
+
+      setMaxFrames(total);
+      setFps(camData.fps);
       setStartFrame(0);
       setEndFrame(defaultEnd);
 
@@ -244,6 +282,7 @@ export function useTimelinePlayback(
     endFrame,
     stopPlayback,
     initAndPlay,
+    initAndPlayCamera,
     applyLoopAndRefresh,
   };
 }

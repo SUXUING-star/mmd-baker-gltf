@@ -39,7 +39,7 @@ export default function App() {
   );
   const meta = useVrmaMetadata();
 
-  const isBaked = pipeline.timeline.maxFrames > 0;
+  const isBaked = pipeline.statusType === 'ready_to_export' || pipeline.timeline.maxFrames > 0;
 
   const switchLanguage = (newLang: Lang) => {
     setLang(newLang);
@@ -93,7 +93,7 @@ export default function App() {
           margin-bottom: 16px;
         }
 
-        /* 电脑端 (>= 1024px) 三栏布局：左栏收紧为 220px 极简导入，中间为 3D + 进度条，右栏 300px 导出设置 */
+        /* 电脑端 (>= 1024px) 三栏布局 */
         @media (min-width: 1024px) {
           .mmd-shell {
             max-width: 1600px;
@@ -132,7 +132,7 @@ export default function App() {
       `}</style>
 
       <div className="mmd-shell">
-        {/* 顶部标题与极简语言切换 */}
+        {/* 顶部标题与语言切换 */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 12, flexWrap: 'wrap' }}>
           <h2 style={{ margin: 0, color: '#111827', fontSize: 18, fontWeight: 700 }}>{t.title}</h2>
           <div style={{ display: 'flex', gap: 2, background: '#f3f4f6', padding: 2, borderRadius: 4 }}>
@@ -159,7 +159,7 @@ export default function App() {
 
         {/* 响应式三栏工作区 */}
         <div className="mmd-workspace">
-          {/* 左栏：模型与动作导入 */}
+          {/* 左栏：模型与动作/镜头导入 */}
           <div className="mmd-col-left">
             <div className="mmd-slot-dropzone">
               <DropZoneSection t={t} pipeline={pipeline} />
@@ -169,7 +169,13 @@ export default function App() {
           {/* 中间栏：3D 视口与拖动进度条/表情轨 */}
           <div className="mmd-col-center">
             <div className="mmd-slot-canvas">
-              <ThreeCanvas containerRef={canvasContainerRef} />
+              <ThreeCanvas
+                t={t}
+                containerRef={canvasContainerRef}
+                viewMode={threeBridge.viewMode}
+                onToggleViewMode={threeBridge.setViewMode}
+                isCameraMode={pipeline.bakeTargetType === 'camera'}
+              />
             </div>
 
             <div className="mmd-slot-clip">
@@ -185,17 +191,19 @@ export default function App() {
             </div>
           </div>
 
-          {/* 右栏：循环设置 + 元数据 + 烘焙导出 */}
+          {/* 右栏：元数据 + 烘焙导出 */}
           <div className="mmd-col-right">
-            <div className="mmd-slot-loop">
-              <LoopTransitionSection
-                t={t}
-                loopState={loopState}
-                disabled={pipeline.processing}
-                isBaked={isBaked}
-                onApply={(opts) => pipeline.applyLoopAndRefresh(opts)}
-              />
-            </div>
+            {pipeline.bakeTargetType === 'motion' && (
+              <div className="mmd-slot-loop">
+                <LoopTransitionSection
+                  t={t}
+                  loopState={loopState}
+                  disabled={pipeline.processing}
+                  isBaked={isBaked}
+                  onApply={(opts) => pipeline.applyLoopAndRefresh(opts)}
+                />
+              </div>
+            )}
 
             <div className="mmd-slot-meta">
               <MetadataSection t={t} meta={meta} disabled={pipeline.processing} />

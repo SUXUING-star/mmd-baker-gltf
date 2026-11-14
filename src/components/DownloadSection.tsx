@@ -12,6 +12,7 @@ interface DownloadSectionProps {
 
 export const DownloadSection: React.FC<DownloadSectionProps> = ({ t, pipeline, meta }) => {
   const {
+    bakeTargetType,
     status,
     statusType,
     progress,
@@ -26,8 +27,8 @@ export const DownloadSection: React.FC<DownloadSectionProps> = ({ t, pipeline, m
   } = pipeline;
 
   const { maxFrames, startFrame, endFrame, fps } = timeline;
-  const isBaked = maxFrames > 0;
-  const frameCount = isBaked ? endFrame - startFrame + 1 : 0;
+  const isBaked = statusType === 'ready_to_export' || maxFrames > 0;
+  const frameCount = isBaked ? Math.max(1, endFrame - startFrame + 1) : 0;
   const durationSec = isBaked ? (frameCount / fps).toFixed(2) : '0';
   const isExporting = exportingType !== null;
   const isBusy = processing || isExporting;
@@ -45,7 +46,11 @@ export const DownloadSection: React.FC<DownloadSectionProps> = ({ t, pipeline, m
               color: statusType === 'error' ? '#dc2626' : processing ? '#d97706' : isBaked ? '#1677ff' : '#4b5563',
             }}
           >
-            {processing && progress > 0 ? t.bakingProgress(progress) : status}
+            {processing && progress > 0
+              ? bakeTargetType === 'motion'
+                ? t.bakingProgress(progress)
+                : t.bakingCameraProgress(progress)
+              : status}
           </span>
         </div>
 
@@ -87,11 +92,21 @@ export const DownloadSection: React.FC<DownloadSectionProps> = ({ t, pipeline, m
             opacity: isBusy ? 0.6 : 1,
           }}
         >
-          {processing ? t.bakingProgress(progress) : isBaked ? t.reBakeBtn : t.startBakeBtn}
+          {processing
+            ? bakeTargetType === 'motion'
+              ? t.bakingProgress(progress)
+              : t.bakingCameraProgress(progress)
+            : isBaked
+            ? bakeTargetType === 'motion'
+              ? t.reBakeBtn
+              : t.reBakeCameraBtn
+            : bakeTargetType === 'motion'
+            ? t.startBakeBtn
+            : t.startBakeCameraBtn}
         </button>
       </div>
 
-      {/* 导出区域 */}
+      {/* 导出区域 (同时包含 VRMA, GLB 和全部导出) */}
       {isBaked && (
         <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: 10, marginTop: 10 }}>
           <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 8 }}>
@@ -117,7 +132,11 @@ export const DownloadSection: React.FC<DownloadSectionProps> = ({ t, pipeline, m
                   opacity: isBusy ? 0.6 : 1,
                 }}
               >
-                {exportingType === 'vrma' ? t.exportingVrma : t.downloadVrma}
+                {exportingType === 'vrma'
+                  ? t.exportingVrma
+                  : bakeTargetType === 'camera'
+                  ? t.downloadCameraVrma
+                  : t.downloadVrma}
               </button>
 
               <button
@@ -137,7 +156,11 @@ export const DownloadSection: React.FC<DownloadSectionProps> = ({ t, pipeline, m
                   opacity: isBusy ? 0.6 : 1,
                 }}
               >
-                {exportingType === 'glb' ? t.exportingGlb : t.downloadGlb}
+                {exportingType === 'glb'
+                  ? t.exportingGlb
+                  : bakeTargetType === 'camera'
+                  ? t.downloadCameraGlb
+                  : t.downloadGlb}
               </button>
             </div>
 

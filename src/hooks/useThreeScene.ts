@@ -1,5 +1,5 @@
 // src/hooks/useThreeScene.ts
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { MMDAnimationHelper } from 'three/examples/jsm/animation/MMDAnimationHelper.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -11,14 +11,20 @@ interface BoneRestTransform {
   scale: THREE.Vector3;
 }
 
+export type ViewMode = 'orbit' | 'camera';
+
 export function useThreeScene(containerRef: React.RefObject<HTMLDivElement | null>) {
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const helperCameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const cameraHelperRef = useRef<THREE.CameraHelper | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
   const pointsGroupRef = useRef<THREE.Group | null>(null);
   const currentMeshRef = useRef<THREE.Object3D | null>(null);
   const mmdHelperRef = useRef<MMDAnimationHelper | null>(null);
   const restBonesRef = useRef<BoneRestTransform[]>([]);
+  const viewModeRef = useRef<ViewMode>('camera');
+  const [viewMode, setViewModeState] = useState<ViewMode>('camera');
 
   const sphereGeoRef = useRef<THREE.SphereGeometry>(new THREE.SphereGeometry(0.12, 8, 8));
   const pointMatRef = useRef<THREE.MeshBasicMaterial>(new THREE.MeshBasicMaterial({ color: 0xff0055, depthTest: false }));
@@ -36,6 +42,14 @@ export function useThreeScene(containerRef: React.RefObject<HTMLDivElement | nul
     const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
     camera.position.set(0, 10, 25);
     cameraRef.current = camera;
+
+    // 创建自由轨道模式下显示的镜头视锥框 Helper
+    const helperCamera = new THREE.PerspectiveCamera(45, width / height, 0.5, 12);
+    helperCameraRef.current = helperCamera;
+    const cameraHelper = new THREE.CameraHelper(helperCamera);
+    cameraHelper.visible = false;
+    scene.add(cameraHelper);
+    cameraHelperRef.current = cameraHelper;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(width, height);
@@ -81,12 +95,65 @@ export function useThreeScene(containerRef: React.RefObject<HTMLDivElement | nul
     };
   }, [containerRef]);
 
+  const setViewMode = useCallback((mode: ViewMode) => {
+    viewModeRef.current = mode;
+    setViewModeState(mode);
+
+    if (controlsRef.current) {
+      controlsRef.current.enabled = mode === 'orbit';
+    }
+    if (cameraHelperRef.current) {
+      cameraHelperRef.current.visible = mode === 'orbit';
+    }
+    if (mode === 'orbit' && cameraRef.current && controlsRef.current) {
+      cameraRef.current.fov = 45;
+      cameraRef.current.position.set(0, 10, 25);
+      controlsRef.current.target.set(0, 9, 0);
+      controlsRef.current.update();
+    }
+  }, []);
+
   const setMmdCamera = useCallback(() => {
     if (!cameraRef.current || !controlsRef.current) return;
     cameraRef.current.position.set(0, 10, 25);
     controlsRef.current.target.set(0, 9, 0);
     controlsRef.current.update();
   }, []);
+
+  const setCameraPose = useCallback(
+    (
+      pos: THREE.Vector3 | [number, number, number],
+      quat: THREE.Quaternion | [number, number, number, number],
+      fov?: number
+    ) => {
+      const p = Array.isArray(pos) ? new THREE.Vector3(pos[0], pos[1], pos[2]) : pos;
+      const q = Array.isArray(quat)
+        ? new THREE.Quaternion(quat[0], quat[1], quat[2], quat[3])
+        : quat;
+      const currentFov = fov || 45;
+
+      // 更新 Helper 镜头框
+      if (helperCameraRef.current && cameraHelperRef.current) {
+        helperCameraRef.current.position.copy(p);
+        helperCameraRef.current.quaternion.copy(q);
+        helperCameraRef.current.fov = currentFov;
+        helperCameraRef.current.updateProjectionMatrix();
+        cameraHelperRef.current.update();
+      }
+
+      // 如果处于【镜头透视】模式，把场景主相机定位到镜头姿态
+      if (viewModeRef.current === 'camera' && cameraRef.current) {
+        if (controlsRef.current) {
+          controlsRef.current.enabled = false;
+        }
+        cameraRef.current.position.copy(p);
+        cameraRef.current.quaternion.copy(q);
+        cameraRef.current.fov = currentFov;
+        cameraRef.current.updateProjectionMatrix();
+      }
+    },
+    []
+  );
 
   const clearPoints = useCallback(() => {
     if (pointsGroupRef.current) {
@@ -242,7 +309,10 @@ export function useThreeScene(containerRef: React.RefObject<HTMLDivElement | nul
   );
 
   return {
+    viewMode,
+    setViewMode,
     setMmdCamera,
+    setCameraPose,
     clearCurrentMesh,
     clearPoints,
     setupMmdAnimation,

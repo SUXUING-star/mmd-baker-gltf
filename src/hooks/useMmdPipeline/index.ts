@@ -1,6 +1,10 @@
-import { useCallback, useMemo, useState } from 'react';
+// src/hooks/useMmdPipeline/index.ts
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { I18N, Lang } from '../../i18n';
+import { CameraAnimationData } from '../../solvers/cameraSolver';
 import { ModelMorphInfo } from '../../types/types';
+import { bakeCameraVmd } from '../../utils/cameraBaker';
+import { exportCameraGLB, exportCameraVRMA } from '../../utils/cameraExporter';
 import { ExpressionTrack } from '../../utils/expressionTrackEvaluator';
 import { DEFAULT_LOOP_OPTIONS, LoopBlendOptions } from '../../utils/loopBlender';
 import { VmdExpressionTrackSummary } from '../../utils/vmdExpressionAnalyzer';
@@ -9,15 +13,19 @@ import { BakerThreeBridge, useMmdBaker } from './useMmdBaker';
 import { useMmdFiles } from './useMmdFiles';
 import { useMotionExporter } from './useMotionExporter';
 import {
-  TimelineController,
-  TimelineThreeBridge,
-  useTimelinePlayback,
+    TimelineController,
+    TimelineThreeBridge,
+    useTimelinePlayback,
 } from './useTimelinePlayback';
 
 export type StatusType = 'ready' | 'analyzing' | 'ready_to_export' | 'exporting' | 'error';
+export type BakeTargetType = 'motion' | 'camera';
+
 export type { TimelineController };
 
 export interface MmdPipeline {
+  bakeTargetType: BakeTargetType;
+  setBakeTargetType: (type: BakeTargetType) => void;
   status: string;
   statusType: StatusType;
   progress: number;
@@ -36,6 +44,8 @@ export interface MmdPipeline {
   loadDefaultDemo: () => Promise<void>;
   downloadVrma: (metaOptions?: VrmaMetaOptions) => Promise<void>;
   downloadGlb: () => Promise<void>;
+  downloadCameraVrma: (metaOptions?: VrmaMetaOptions) => Promise<void>;
+  downloadCameraGlb: () => Promise<void>;
   downloadBoth: (metaOptions?: VrmaMetaOptions) => Promise<void>;
   applyLoopAndRefresh: (newOptions?: LoopBlendOptions) => void;
   vmdExpressionTracks: VmdExpressionTrackSummary[];
@@ -45,6 +55,8 @@ export interface MmdPipeline {
 export interface ThreeBridge extends BakerThreeBridge, TimelineThreeBridge {
   clearPoints: () => void;
   renderLandmarksPositions: (landmarks: Record<string, [number, number, number]>) => void;
+  viewMode?: 'orbit' | 'camera';
+  setViewMode?: (mode: 'orbit' | 'camera') => void;
 }
 
 export function useMmdPipeline(
@@ -55,8 +67,12 @@ export function useMmdPipeline(
   loopOptions: LoopBlendOptions = DEFAULT_LOOP_OPTIONS,
   expressionTracks: ExpressionTrack[] = []
 ): MmdPipeline {
+  const [bakeTargetType, setBakeTargetType] = useState<BakeTargetType>('motion');
   const [statusType, setStatusType] = useState<StatusType>('ready');
   const [errorMessage, setErrorMessage] = useState<string>('');
+
+  const cameraDataRef = useRef<CameraAnimationData | null>(null);
+  const [cameraData, setCameraDataState] = useState<CameraAnimationData | null>(null);
 
   const markReady = useCallback(() => setStatusType('ready'), []);
 
@@ -66,7 +82,8 @@ export function useMmdPipeline(
     baker.rawLandmarkDataRef,
     threeBridge,
     loopOptions,
-    expressionTracks
+    expressionTracks,
+    cameraDataRef
   );
   const exporter = useMotionExporter({
     rawLandmarkDataRef: baker.rawLandmarkDataRef,
@@ -77,7 +94,7 @@ export function useMmdPipeline(
     getBaseFilename: files.getBaseFilename,
   });
 
-  const runBake = useCallback(
+  const runBakeMotion = useCallback(
     async (pmxTarget: File | string, vmdTarget: File | string, extraFiles: File[]) => {
       try {
         playback.stopPlayback();
@@ -94,14 +111,118 @@ export function useMmdPipeline(
     [playback, baker]
   );
 
+  const runBakeCamera = useCallback(
+    async (vmdTarget: File | string) => {
+      try {
+        playback.stopPlayback();
+        setStatusType('analyzing');
+        threeBridge.setViewMode?.('camera');
+
+        // 1. 先将角色模型载入 3D 画布，防止画面空白
+        await baker.loadCharacterModel(files.activePmxTarget, files.customExtraFiles);
+
+        // 2. 执行镜头解算并逐帧驱动相机
+        const result = await bakeCameraVmd(vmdTarget, (cam) => {
+          threeBridge.setCameraPose?.(cam.position, cam.quaternion, cam.fov);
+        });
+
+        cameraDataRef.current = result;
+        setCameraDataState(result);
+        setStatusType('ready_to_export');
+        playback.initAndPlayCamera(result);
+      } catch (err: unknown) {
+        console.error(err);
+        setStatusType('error');
+        setErrorMessage(err instanceof Error ? err.message : String(err));
+      }
+    },
+    [playback, baker, files, threeBridge]
+  );
+
   const startBake = useCallback(async () => {
-    await runBake(files.activePmxTarget, files.activeVmdTarget, files.customExtraFiles);
-  }, [runBake, files.activePmxTarget, files.activeVmdTarget, files.customExtraFiles]);
+    if (bakeTargetType === 'motion') {
+      await runBakeMotion(files.activePmxTarget, files.activeVmdTarget, files.customExtraFiles);
+    } else {
+      if (!files.vmdFile) {
+        alert('在镜头解算模式下，请选择上传专属的 .vmd 镜头文件！');
+        return;
+      }
+      await runBakeCamera(files.vmdFile);
+    }
+  }, [bakeTargetType, runBakeMotion, runBakeCamera, files]);
 
   const loadDefaultDemo = useCallback(async () => {
     files.resetAllToDefault();
-    await runBake(defaultPmxPath, defaultVmdPath, []);
-  }, [files, runBake, defaultPmxPath, defaultVmdPath]);
+    if (bakeTargetType === 'motion') {
+      await runBakeMotion(defaultPmxPath, defaultVmdPath, []);
+    } else {
+      alert('请上传专属的 MMD 镜头 .vmd 文件进行解算！');
+    }
+  }, [bakeTargetType, files, runBakeMotion, defaultPmxPath, defaultVmdPath]);
+
+  const downloadCameraVrma = useCallback(
+    async (metaOptions?: VrmaMetaOptions) => {
+      if (!cameraData) return;
+      try {
+        const blob = await exportCameraVRMA(cameraData, metaOptions, playback.startFrame, playback.endFrame);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${files.getBaseFilename()}_camera.vrma`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      } catch (err) {
+        alert(`导出相机 VRMA 失败: ${err}`);
+      }
+    },
+    [cameraData, playback.startFrame, playback.endFrame, files]
+  );
+
+  const downloadCameraGlb = useCallback(async () => {
+    if (!cameraData) return;
+    try {
+      const blob = await exportCameraGLB(cameraData, playback.startFrame, playback.endFrame);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${files.getBaseFilename()}_camera.glb`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      alert(`导出相机 GLB 失败: ${err}`);
+    }
+  }, [cameraData, playback.startFrame, playback.endFrame, files]);
+
+  const downloadVrma = useCallback(
+    async (metaOptions?: VrmaMetaOptions) => {
+      if (bakeTargetType === 'camera') {
+        await downloadCameraVrma(metaOptions);
+      } else {
+        await exporter.downloadVrma(metaOptions);
+      }
+    },
+    [bakeTargetType, downloadCameraVrma, exporter]
+  );
+
+  const downloadGlb = useCallback(async () => {
+    if (bakeTargetType === 'camera') {
+      await downloadCameraGlb();
+    } else {
+      await exporter.downloadGlb();
+    }
+  }, [bakeTargetType, downloadCameraGlb, exporter]);
+
+  const downloadBoth = useCallback(
+    async (metaOptions?: VrmaMetaOptions) => {
+      await downloadVrma(metaOptions);
+      await downloadGlb();
+    },
+    [downloadVrma, downloadGlb]
+  );
 
   const status = useMemo(() => {
     const t = I18N[lang];
@@ -109,7 +230,7 @@ export function useMmdPipeline(
       case 'ready':
         return t.statusReady;
       case 'analyzing':
-        return t.statusAnalyzing;
+        return bakeTargetType === 'motion' ? t.statusAnalyzing : t.bakingCameraProgress(baker.progress);
       case 'ready_to_export':
         return t.statusReadyToExport;
       case 'exporting':
@@ -117,9 +238,11 @@ export function useMmdPipeline(
       case 'error':
         return t.statusError(errorMessage);
     }
-  }, [lang, statusType, errorMessage]);
+  }, [lang, statusType, bakeTargetType, baker.progress, errorMessage]);
 
   return {
+    bakeTargetType,
+    setBakeTargetType,
     status,
     statusType,
     progress: baker.progress,
@@ -136,9 +259,11 @@ export function useMmdPipeline(
     timeline: playback.timeline,
     startBake,
     loadDefaultDemo,
-    downloadVrma: exporter.downloadVrma,
-    downloadGlb: exporter.downloadGlb,
-    downloadBoth: exporter.downloadBoth,
+    downloadVrma,
+    downloadGlb,
+    downloadCameraVrma,
+    downloadCameraGlb,
+    downloadBoth,
     applyLoopAndRefresh: playback.applyLoopAndRefresh,
     vmdExpressionTracks: baker.vmdExpressionTracks,
     getFrameVmdExpressions: baker.getFrameVmdExpressions,

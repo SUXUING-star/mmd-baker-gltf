@@ -1,7 +1,7 @@
 // src/hooks/useMmdPipeline/useMmdBaker.ts
 import { useCallback, useRef, useState } from 'react';
 import { LandmarkData, ModelMorphInfo } from '../../types/types';
-import { bakePure3DLandmarks, BakerResult } from '../../utils/baker';
+import { bakePure3DLandmarks, BakerResult, loadPmxMeshOnly } from '../../utils/baker';
 import {
     analyzeVmdExpressions,
     VmdExpressionTrackSummary,
@@ -10,7 +10,7 @@ import {
 export interface BakerThreeBridge {
   setMmdCamera: () => void;
   clearCurrentMesh: () => void;
-  setupMmdAnimation: (mesh: any, animation: any) => void;
+  setupMmdAnimation: (mesh: any, animation?: any) => void;
   updateLandmarks: (mesh: any, landmarks: Record<string, [number, number, number]>) => void;
 }
 
@@ -20,6 +20,21 @@ export function useMmdBaker(threeBridge: BakerThreeBridge) {
   const [vmdExpressionTracks, setVmdExpressionTracks] = useState<VmdExpressionTrackSummary[]>([]);
   const [progress, setProgress] = useState<number>(0);
   const [processing, setProcessing] = useState<boolean>(false);
+
+  const loadCharacterModel = useCallback(
+    async (pmxTarget: File | string, extraFiles: File[]) => {
+      try {
+        setProcessing(true);
+        threeBridge.clearCurrentMesh();
+        const mesh = await loadPmxMeshOnly(pmxTarget, extraFiles);
+        threeBridge.setupMmdAnimation(mesh);
+        return mesh;
+      } finally {
+        setProcessing(false);
+      }
+    },
+    [threeBridge]
+  );
 
   const bake = useCallback(
     async (
@@ -70,6 +85,7 @@ export function useMmdBaker(threeBridge: BakerThreeBridge) {
     getFrameVmdExpressions,
     progress,
     processing,
+    loadCharacterModel,
     bake,
   };
 }

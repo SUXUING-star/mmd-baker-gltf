@@ -27,9 +27,8 @@ interface ActiveMorphBinding {
 }
 
 const BLANK_TEXTURE_DATA_URL =
-  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORUS5CYII=';
 
-/** 提取模型自身全部可用的 Morph 列表（按 PMX 定义顺序） */
 function extractModelMorphs(mesh: THREE.SkinnedMesh): ModelMorphInfo[] {
   const dict = mesh.morphTargetDictionary;
   if (!dict) return [];
@@ -42,7 +41,6 @@ function extractModelMorphs(mesh: THREE.SkinnedMesh): ModelMorphInfo[] {
     });
 }
 
-/** 提取 VMD 动画中实际存在关键帧的表情 Morph 绑定 */
 function resolveAnimatedMorphs(mesh: THREE.SkinnedMesh, animation: THREE.AnimationClip): ActiveMorphBinding[] {
   const dict = mesh.morphTargetDictionary;
   if (!dict) return [];
@@ -63,6 +61,91 @@ function resolveAnimatedMorphs(mesh: THREE.SkinnedMesh, animation: THREE.Animati
   }
 
   return bindings;
+}
+
+/** 仅加载 PMX 角色模型（不绑定骨骼动画），用于镜头视角下展示预览角色 */
+export async function loadPmxMeshOnly(
+  pmxInput: File | string,
+  extraFiles?: File[]
+): Promise<THREE.SkinnedMesh> {
+  let pmxUrl: string;
+  let isPmxBlob = false;
+
+  if (typeof pmxInput === 'string') {
+    pmxUrl = pmxInput;
+  } else {
+    pmxUrl = URL.createObjectURL(pmxInput) + '#model.pmx';
+    isPmxBlob = true;
+  }
+
+  const manager = new THREE.LoadingManager();
+  const createdBlobUrls: string[] = [];
+  const fileMap = new Map<string, string>();
+
+  if (extraFiles && extraFiles.length > 0) {
+    for (const file of extraFiles) {
+      const blobUrl = URL.createObjectURL(file);
+      createdBlobUrls.push(blobUrl);
+
+      fileMap.set(file.name.toLowerCase(), blobUrl);
+
+      if (file.webkitRelativePath) {
+        const normalizedRel = file.webkitRelativePath.toLowerCase().replace(/\\/g, '/');
+        fileMap.set(normalizedRel, blobUrl);
+        const parts = normalizedRel.split('/');
+        if (parts.length > 1) {
+          fileMap.set(parts.slice(1).join('/'), blobUrl);
+        }
+      }
+    }
+  }
+
+  manager.setURLModifier((url: string) => {
+    if (url.includes('#model.pmx') || url.includes('#motion.vmd') || url.startsWith('data:')) {
+      return url;
+    }
+
+    if (!url.startsWith('blob:')) {
+      return url.replace(/\\/g, '/');
+    }
+
+    const cleanUrl = decodeURIComponent(url).replace(/\\/g, '/');
+    const pathname = cleanUrl.replace(/^blob:https?:\/\/[^/]+\//i, '').replace(/^\.\//, '');
+    const filename = pathname.split('/').pop()?.toLowerCase() || '';
+    const lowerPath = pathname.toLowerCase();
+
+    if (fileMap.has(lowerPath)) {
+      return fileMap.get(lowerPath)!;
+    }
+    if (fileMap.has(filename)) {
+      return fileMap.get(filename)!;
+    }
+
+    if (/\.(png|jpe?g|bmp|tga|spa|sph|webp|dds)$/i.test(cleanUrl) || cleanUrl.includes('Texture2D') || cleanUrl.includes('tex')) {
+      return BLANK_TEXTURE_DATA_URL;
+    }
+
+    return url;
+  });
+
+  try {
+    const loader = new MMDLoader(manager);
+    const mesh = await new Promise<THREE.SkinnedMesh>((resolve, reject) => {
+      loader.load(
+        pmxUrl,
+        (m) => resolve(m),
+        undefined,
+        (err: unknown) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          reject(new Error(`无法加载 PMX 模型 [${pmxUrl}]: ${msg}`));
+        }
+      );
+    });
+    return mesh;
+  } finally {
+    if (isPmxBlob) URL.revokeObjectURL(pmxUrl.split('#')[0]);
+    createdBlobUrls.forEach((u) => URL.revokeObjectURL(u));
+  }
 }
 
 export async function bakePure3DLandmarks(
@@ -182,7 +265,6 @@ export async function bakePure3DLandmarks(
     const activeMorphs = resolveAnimatedMorphs(mesh, animation);
 
     const worldPos = new THREE.Vector3();
-    // 采样模型静止 Rest Pose 坐标
     mesh.updateMatrixWorld(true);
     const restLandmarks: Record<string, [number, number, number]> = {};
     standardBoneMap.forEach((bone, stdName) => {
