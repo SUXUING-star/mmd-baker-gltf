@@ -12,9 +12,9 @@ export const MetadataSection: React.FC<MetadataSectionProps> = ({ t, meta, disab
   const { metadata, updateField } = meta;
 
   return (
-    <div style={{ border: '1px solid #e0e0e0', borderRadius: 8, padding: 14, background: '#fafafa', marginBottom: 16 }}>
+    <div style={{ border: '1px solid #e0e0e0', borderRadius: 4, padding: 14, background: '#fafafa', marginBottom: 16 }}>
       <div style={{ fontSize: 13, fontWeight: 700, color: '#333', marginBottom: 10 }}>{t.metadataTitle}</div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+      <div className="mmd-meta-grid">
         <div>
           <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 4 }}>
             {t.metaTitle}
@@ -25,7 +25,7 @@ export const MetadataSection: React.FC<MetadataSectionProps> = ({ t, meta, disab
             placeholder={t.metaTitlePlaceholder}
             disabled={disabled}
             onChange={(e) => updateField('title', e.target.value)}
-            style={{ width: '100%', boxSizing: 'border-box', padding: '6px 8px', fontSize: 12, border: '1px solid #d9d9d9', borderRadius: 4 }}
+            style={{ width: '100%', boxSizing: 'border-box', padding: '6px 8px', fontSize: 12, border: '1px solid #d9d9d9', borderRadius: 2 }}
           />
         </div>
         <div>
@@ -38,7 +38,7 @@ export const MetadataSection: React.FC<MetadataSectionProps> = ({ t, meta, disab
             placeholder={t.metaAuthorsPlaceholder}
             disabled={disabled}
             onChange={(e) => updateField('authors', e.target.value)}
-            style={{ width: '100%', boxSizing: 'border-box', padding: '6px 8px', fontSize: 12, border: '1px solid #d9d9d9', borderRadius: 4 }}
+            style={{ width: '100%', boxSizing: 'border-box', padding: '6px 8px', fontSize: 12, border: '1px solid #d9d9d9', borderRadius: 2 }}
           />
         </div>
         <div>
@@ -51,7 +51,7 @@ export const MetadataSection: React.FC<MetadataSectionProps> = ({ t, meta, disab
             placeholder={t.metaCopyrightPlaceholder}
             disabled={disabled}
             onChange={(e) => updateField('copyrightInformation', e.target.value)}
-            style={{ width: '100%', boxSizing: 'border-box', padding: '6px 8px', fontSize: 12, border: '1px solid #d9d9d9', borderRadius: 4 }}
+            style={{ width: '100%', boxSizing: 'border-box', padding: '6px 8px', fontSize: 12, border: '1px solid #d9d9d9', borderRadius: 2 }}
           />
         </div>
         <div>
@@ -64,7 +64,7 @@ export const MetadataSection: React.FC<MetadataSectionProps> = ({ t, meta, disab
             placeholder={t.metaLicensePlaceholder}
             disabled={disabled}
             onChange={(e) => updateField('licenseUrl', e.target.value)}
-            style={{ width: '100%', boxSizing: 'border-box', padding: '6px 8px', fontSize: 12, border: '1px solid #d9d9d9', borderRadius: 4 }}
+            style={{ width: '100%', boxSizing: 'border-box', padding: '6px 8px', fontSize: 12, border: '1px solid #d9d9d9', borderRadius: 2 }}
           />
         </div>
       </div>

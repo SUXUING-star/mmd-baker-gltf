@@ -15,41 +15,40 @@ export const TransportBar: React.FC<TransportBarProps> = ({ t, timeline, exprSta
 
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <button
           onClick={togglePlay}
           disabled={disabled}
           style={{
-            padding: '6px 16px',
-            background: isPlaying ? '#ff4d4f' : '#1677ff',
+            padding: '5px 14px',
+            background: '#1677ff',
             color: '#fff',
             border: 'none',
-            borderRadius: 4,
+            borderRadius: 2,
             fontWeight: 600,
-            fontSize: 13,
+            fontSize: 12,
             cursor: disabled ? 'not-allowed' : 'pointer',
           }}
         >
           {isPlaying ? t.pause : t.play}
         </button>
-        <span style={{ fontSize: 13, fontWeight: 500, color: '#333' }}>
+        <span style={{ fontSize: 12, color: '#374151' }}>
           {t.currentFrameLabel}: <strong>{currentFrame}</strong> / {maxFrames - 1} ({(currentFrame / fps).toFixed(2)}s)
         </span>
       </div>
 
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         <button
           type="button"
           disabled={disabled}
           onClick={() => exprState.applyAutoBlink(startFrame, endFrame, fps)}
           style={{
-            padding: '5px 10px',
-            borderRadius: 4,
-            border: '1px solid #93c5fd',
-            background: '#eff6ff',
-            color: '#1d4ed8',
-            fontSize: 12,
-            fontWeight: 600,
+            padding: '4px 8px',
+            borderRadius: 2,
+            border: '1px solid #d9d9d9',
+            background: '#ffffff',
+            color: '#374151',
+            fontSize: 11,
             cursor: disabled ? 'not-allowed' : 'pointer',
           }}
         >
@@ -60,12 +59,12 @@ export const TransportBar: React.FC<TransportBarProps> = ({ t, timeline, exprSta
           disabled={disabled || exprState.tracks.length === 0}
           onClick={exprState.clearAllTracks}
           style={{
-            padding: '5px 10px',
-            borderRadius: 4,
-            border: '1px solid #fecaca',
-            background: '#fef2f2',
-            color: '#b91c1c',
-            fontSize: 12,
+            padding: '4px 8px',
+            borderRadius: 2,
+            border: '1px solid #d9d9d9',
+            background: '#ffffff',
+            color: '#dc2626',
+            fontSize: 11,
             cursor: disabled || exprState.tracks.length === 0 ? 'not-allowed' : 'pointer',
           }}
         >
@@ -75,12 +74,12 @@ export const TransportBar: React.FC<TransportBarProps> = ({ t, timeline, exprSta
           onClick={autoSnapLoopEnd}
           disabled={disabled}
           style={{
-            fontSize: 12,
-            padding: '5px 12px',
-            background: '#722ed1',
-            color: '#fff',
-            border: 'none',
-            borderRadius: 4,
+            fontSize: 11,
+            padding: '4px 10px',
+            background: '#ffffff',
+            color: '#1677ff',
+            border: '1px solid #1677ff',
+            borderRadius: 2,
             cursor: disabled ? 'not-allowed' : 'pointer',
             fontWeight: 600,
           }}

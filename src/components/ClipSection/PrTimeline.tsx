@@ -1,20 +1,22 @@
 import React, { useMemo, useRef } from 'react';
 import { ExpressionTracksController } from '../../hooks/useExpressionTracks';
 import { TimelineController } from '../../hooks/useMmdPipeline';
+import { I18nTexts } from '../../i18n';
 import { evaluateExpressionTrackAtFrame } from '../../utils/expressionTrackEvaluator';
 import { VmdExpressionTrackSummary } from '../../utils/vmdExpressionAnalyzer';
 
 interface PrTimelineProps {
+  t?: I18nTexts;
   timeline: TimelineController;
   exprState: ExpressionTracksController;
   vmdExpressionTracks: VmdExpressionTrackSummary[];
   getFrameVmdExpressions: (frame: number) => Record<string, number>;
   disabled: boolean;
 }
-
 const TRACK_COLORS = ['#0ea5e9', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#6366f1'];
 
 export const PrTimeline: React.FC<PrTimelineProps> = ({
+  t,
   timeline,
   exprState,
   vmdExpressionTracks,
@@ -85,7 +87,7 @@ export const PrTimeline: React.FC<PrTimelineProps> = ({
       >
         <span style={{ fontWeight: 600, color: '#374151' }}>F{currentFrame} VMD:</span>
         {activeVmdAtCurrent.length === 0 ? (
-          <span style={{ color: '#9ca3af' }}>No active VMD morph</span>
+          <span style={{ color: '#9ca3af' }}>{t?.noActiveVmdMorph ?? 'No active VMD morph'}</span>
         ) : (
           activeVmdAtCurrent.map(([name, w]) => (
             <button
@@ -235,7 +237,7 @@ export const PrTimeline: React.FC<PrTimelineProps> = ({
         {/* VMD 原生表情 PR 剪辑条轨道 */}
         <div style={{ maxHeight: 165, overflowY: 'auto' }}>
           {vmdExpressionTracks.length === 0 ? (
-            <div style={{ padding: '8px 12px', fontSize: 11, color: '#9ca3af' }}>No VMD facial morph tracks detected.</div>
+            <div style={{ padding: '8px 12px', fontSize: 11, color: '#9ca3af' }}>{t?.noVmdMorphTracks ?? 'No VMD facial morph tracks detected.'}</div>
           ) : (
             vmdExpressionTracks.map((track, idx) => {
               const color = TRACK_COLORS[idx % TRACK_COLORS.length];

@@ -34,6 +34,7 @@ export const ClipSection: React.FC<ClipSectionProps> = ({
     <div style={{ padding: '14px 16px', background: '#fafafa', border: '1px solid #e8e8e8', borderRadius: 8, marginBottom: 16 }}>
       <TransportBar t={t} timeline={timeline} exprState={exprState} disabled={disabled} />
       <PrTimeline
+        t={t}
         timeline={timeline}
         exprState={exprState}
         vmdExpressionTracks={vmdExpressionTracks}

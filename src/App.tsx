@@ -47,68 +47,165 @@ export default function App() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', width: '100%', background: '#ffffff', padding: '24px 0', boxSizing: 'border-box', overflowY: 'auto' }}>
-      <div style={{ maxWidth: 960, margin: '0 auto', padding: '0 20px' }}>
+    <div className="mmd-page">
+      <style>{`
+        .mmd-page {
+          min-height: 100vh;
+          width: 100%;
+          background: #ffffff;
+          padding: 16px 0;
+          box-sizing: border-box;
+          overflow-y: auto;
+          color: #1f2937;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
 
-        {/* 顶部标题与语言切换 */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <h2 style={{ margin: 0, color: '#111', fontSize: 20, fontWeight: 700 }}>{t.title}</h2>
-          <div style={{ display: 'flex', gap: 4, background: '#f0f0f0', padding: 3, borderRadius: 6 }}>
-            {(['zh', 'en'] as const).map((l) => (
+        .mmd-shell {
+          max-width: 960px;
+          margin: 0 auto;
+          padding: 0 16px;
+          box-sizing: border-box;
+        }
+
+        /* 手机端默认纵向单列 */
+        .mmd-workspace {
+          display: flex;
+          flex-direction: column;
+        }
+
+        .mmd-col-left,
+        .mmd-col-center,
+        .mmd-col-right {
+          display: contents;
+        }
+
+        .mmd-slot-canvas { order: 1; }
+        .mmd-slot-clip { order: 2; }
+        .mmd-slot-loop { order: 3; }
+        .mmd-slot-dropzone { order: 4; }
+        .mmd-slot-meta { order: 5; }
+        .mmd-slot-download { order: 6; }
+
+        .mmd-dropzone-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 12px;
+          margin-bottom: 16px;
+        }
+
+        /* 电脑端 (>= 1024px) 三栏布局：左栏收紧为 220px 极简导入，中间为 3D + 进度条，右栏 300px 导出设置 */
+        @media (min-width: 1024px) {
+          .mmd-shell {
+            max-width: 1600px;
+            padding: 0 20px;
+          }
+
+          .mmd-workspace {
+            display: grid;
+            grid-template-columns: 220px minmax(0, 1fr) 300px;
+            gap: 16px;
+            align-items: start;
+          }
+
+          .mmd-col-left,
+          .mmd-col-center,
+          .mmd-col-right {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+          }
+
+          .mmd-slot-canvas,
+          .mmd-slot-clip,
+          .mmd-slot-loop,
+          .mmd-slot-dropzone,
+          .mmd-slot-meta,
+          .mmd-slot-download {
+            order: initial;
+          }
+
+          .mmd-dropzone-grid {
+            grid-template-columns: 1fr;
+            gap: 12px;
+          }
+        }
+      `}</style>
+
+      <div className="mmd-shell">
+        {/* 顶部标题与极简语言切换 */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 12, flexWrap: 'wrap' }}>
+          <h2 style={{ margin: 0, color: '#111827', fontSize: 18, fontWeight: 700 }}>{t.title}</h2>
+          <div style={{ display: 'flex', gap: 2, background: '#f3f4f6', padding: 2, borderRadius: 4 }}>
+            {(['zh', 'en', 'ja'] as const).map((l) => (
               <button
                 key={l}
                 onClick={() => switchLanguage(l)}
                 style={{
                   border: 'none',
-                  borderRadius: 4,
-                  padding: '4px 10px',
+                  borderRadius: 3,
+                  padding: '3px 8px',
                   fontSize: 12,
                   cursor: 'pointer',
                   background: lang === l ? '#1677ff' : 'transparent',
-                  color: lang === l ? '#fff' : '#666',
+                  color: lang === l ? '#ffffff' : '#4b5563',
                   fontWeight: lang === l ? 600 : 400,
                 }}
               >
-                {l === 'zh' ? '中文' : 'English'}
+                {l === 'zh' ? '中文' : l === 'en' ? 'English' : '日本語'}
               </button>
             ))}
           </div>
         </div>
 
-        {/* 1. 3D 预览视口 */}
-        <ThreeCanvas containerRef={canvasContainerRef} />
+        {/* 响应式三栏工作区 */}
+        <div className="mmd-workspace">
+          {/* 左栏：模型与动作导入 */}
+          <div className="mmd-col-left">
+            <div className="mmd-slot-dropzone">
+              <DropZoneSection t={t} pipeline={pipeline} />
+            </div>
+          </div>
 
-        {/* 2. 统一 PR 时间轴与表情编辑器 */}
-        <ClipSection
-          t={t}
-          timeline={pipeline.timeline}
-          exprState={exprState}
-          availableMorphs={pipeline.availableMorphs}
-          vmdExpressionTracks={pipeline.vmdExpressionTracks}
-          getFrameVmdExpressions={pipeline.getFrameVmdExpressions}
-          disabled={pipeline.processing}
-        />
+          {/* 中间栏：3D 视口与拖动进度条/表情轨 */}
+          <div className="mmd-col-center">
+            <div className="mmd-slot-canvas">
+              <ThreeCanvas containerRef={canvasContainerRef} />
+            </div>
 
-        {/* 3. 动作循环衔接面板 */}
-        <LoopTransitionSection
-          t={t}
-          loopState={loopState}
-          disabled={pipeline.processing}
-          isBaked={isBaked}
-          onApply={(opts) => pipeline.applyLoopAndRefresh(opts)}
-        />
+            <div className="mmd-slot-clip">
+              <ClipSection
+                t={t}
+                timeline={pipeline.timeline}
+                exprState={exprState}
+                availableMorphs={pipeline.availableMorphs}
+                vmdExpressionTracks={pipeline.vmdExpressionTracks}
+                getFrameVmdExpressions={pipeline.getFrameVmdExpressions}
+                disabled={pipeline.processing}
+              />
+            </div>
+          </div>
 
+          {/* 右栏：循环设置 + 元数据 + 烘焙导出 */}
+          <div className="mmd-col-right">
+            <div className="mmd-slot-loop">
+              <LoopTransitionSection
+                t={t}
+                loopState={loopState}
+                disabled={pipeline.processing}
+                isBaked={isBaked}
+                onApply={(opts) => pipeline.applyLoopAndRefresh(opts)}
+              />
+            </div>
 
+            <div className="mmd-slot-meta">
+              <MetadataSection t={t} meta={meta} disabled={pipeline.processing} />
+            </div>
 
-        {/* 5. 模型与动作文件投递区 */}
-        <DropZoneSection t={t} pipeline={pipeline} />
-
-        {/* 6. VRMA Metadata 表单 */}
-        <MetadataSection t={t} meta={meta} disabled={pipeline.processing} />
-
-        {/* 7. 核心烘焙控制与下载面板 */}
-        <DownloadSection t={t} pipeline={pipeline} meta={meta} />
-
+            <div className="mmd-slot-download">
+              <DownloadSection t={t} pipeline={pipeline} meta={meta} />
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

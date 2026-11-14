@@ -19,11 +19,8 @@ export const LoopTransitionSection: React.FC<Props> = ({
   isBaked = false,
   onApply,
 }) => {
-  if (!isBaked) return null;
-
   const { loopOptions, setLoopOptions } = loopState;
 
-  // 本地草稿状态
   const [draft, setDraft] = useState<LoopBlendOptions>(loopOptions);
   const [isDirty, setIsDirty] = useState<boolean>(false);
 
@@ -31,6 +28,8 @@ export const LoopTransitionSection: React.FC<Props> = ({
     setDraft(loopOptions);
     setIsDirty(false);
   }, [loopOptions]);
+
+  if (!isBaked) return null;
 
   const updateDraft = <K extends keyof LoopBlendOptions>(
     key: K,
@@ -52,53 +51,33 @@ export const LoopTransitionSection: React.FC<Props> = ({
   return (
     <div
       style={{
-        background: '#f8fafc',
-        border: '1px solid #e2e8f0',
-        borderRadius: 8,
-        padding: '14px 16px',
+        background: '#fafafa',
+        border: '1px solid #e5e7eb',
+        borderRadius: 4,
+        padding: 12,
         marginBottom: 16,
       }}
     >
-      {/* 标题栏与总开关 */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          marginBottom: draft.enabled ? 12 : 0,
+          marginBottom: draft.enabled ? 10 : 0,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 16 }}>🔁</span>
-          <span style={{ fontWeight: 600, fontSize: 14, color: '#1e293b' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontWeight: 600, fontSize: 13, color: '#111827' }}>
             {t.loopSectionTitle}
           </span>
           {isDirty && (
-            <span
-              style={{
-                fontSize: 11,
-                color: '#d97706',
-                background: '#fef3c7',
-                padding: '2px 6px',
-                borderRadius: 4,
-                fontWeight: 600,
-              }}
-            >
-              未应用更改
+            <span style={{ fontSize: 10, color: '#1677ff', background: '#e6f4ff', padding: '1px 5px', borderRadius: 2 }}>
+              {t.loopDirtyBadge}
             </span>
           )}
         </div>
 
-        <label
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            cursor: disabled ? 'not-allowed' : 'pointer',
-            fontSize: 13,
-            fontWeight: 500,
-          }}
-        >
+        <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: disabled ? 'not-allowed' : 'pointer', fontSize: 12 }}>
           <input
             type="checkbox"
             checked={draft.enabled}
@@ -109,35 +88,17 @@ export const LoopTransitionSection: React.FC<Props> = ({
         </label>
       </div>
 
-      {/* 详细参数面板 */}
       {draft.enabled && (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: 12,
-            paddingTop: 10,
-            borderTop: '1px dashed #cbd5e1',
-          }}
-        >
-          {/* 模式选择 */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 8, borderTop: '1px dashed #d9d9d9' }}>
           <div>
-            <label style={{ display: 'block', fontSize: 12, color: '#475569', marginBottom: 4 }}>
+            <label style={{ display: 'block', fontSize: 11, color: '#4b5563', marginBottom: 3 }}>
               {t.loopModeLabel}
             </label>
             <select
               value={draft.mode}
               disabled={disabled}
               onChange={(e) => updateDraft('mode', e.target.value as LoopBlendMode)}
-              style={{
-                width: '100%',
-                padding: '6px 8px',
-                borderRadius: 4,
-                border: '1px solid #cbd5e1',
-                fontSize: 12,
-                background: '#fff',
-                color: '#1e293b',
-              }}
+              style={{ width: '100%', padding: '4px 6px', borderRadius: 2, border: '1px solid #d9d9d9', fontSize: 12, background: '#fff' }}
             >
               <option value="idle">{t.loopModeIdle}</option>
               <option value="tail">{t.loopModeTail}</option>
@@ -145,9 +106,8 @@ export const LoopTransitionSection: React.FC<Props> = ({
             </select>
           </div>
 
-          {/* 过渡时长滑块 */}
           <div>
-            <label style={{ display: 'block', fontSize: 12, color: '#475569', marginBottom: 4 }}>
+            <label style={{ display: 'block', fontSize: 11, color: '#4b5563', marginBottom: 3 }}>
               {t.loopDurationLabel}: {draft.blendDuration.toFixed(2)}s
             </label>
             <input
@@ -162,58 +122,34 @@ export const LoopTransitionSection: React.FC<Props> = ({
             />
           </div>
 
-          {/* 选项与生效确认按钮 */}
-          <div
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#374151', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={draft.blendHipsXZ}
+              disabled={disabled}
+              onChange={(e) => updateDraft('blendHipsXZ', e.target.checked)}
+            />
+            {t.blendHipsXZLabel}
+          </label>
+
+          <button
+            type="button"
+            onClick={handleConfirm}
+            disabled={disabled}
             style={{
-              gridColumn: 'span 2',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginTop: 6,
-              paddingTop: 8,
-              borderTop: '1px dashed #e2e8f0',
+              padding: '6px 12px',
+              fontSize: 12,
+              fontWeight: 600,
+              color: '#ffffff',
+              background: '#1677ff',
+              border: 'none',
+              borderRadius: 2,
+              cursor: disabled ? 'not-allowed' : 'pointer',
+              marginTop: 2,
             }}
           >
-            <label
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                fontSize: 12,
-                color: '#475569',
-                cursor: 'pointer',
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={draft.blendHipsXZ}
-                disabled={disabled}
-                onChange={(e) => updateDraft('blendHipsXZ', e.target.checked)}
-              />
-              {t.blendHipsXZLabel}
-            </label>
-
-            {/* 生效确认按钮 */}
-            <button
-              type="button"
-              onClick={handleConfirm}
-              disabled={disabled}
-              style={{
-                padding: '6px 16px',
-                fontSize: 12,
-                fontWeight: 700,
-                color: '#ffffff',
-                background: isDirty ? '#2563eb' : '#059669',
-                border: 'none',
-                borderRadius: 4,
-                cursor: disabled ? 'not-allowed' : 'pointer',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
-                transition: 'all 0.2s ease',
-              }}
-            >
-              {isDirty ? '⚡ 生效确认并刷新 3D 渲染' : '✓ 已应用于 3D 渲染'}
-            </button>
-          </div>
+            {isDirty ? t.loopApplyBtn : t.loopAppliedBtn}
+          </button>
         </div>
       )}
     </div>

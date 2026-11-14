@@ -33,38 +33,16 @@ export const DownloadSection: React.FC<DownloadSectionProps> = ({ t, pipeline, m
   const isBusy = processing || isExporting;
 
   return (
-    <div
-      style={{
-        border: '1px solid #e2e8f0',
-        borderRadius: 8,
-        padding: 16,
-        background: '#ffffff',
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
-      }}
-    >
-      {/* 1. 顶部状态栏与测试 Demo 快捷按钮 */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: 14,
-        }}
-      >
-        <div style={{ fontSize: 13, color: '#334155' }}>
-          <strong style={{ color: '#0f172a' }}>{t.statusLabel}</strong>
+    <div style={{ paddingTop: 4, marginBottom: 16 }}>
+      {/* 状态与演示按钮 */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+        <div style={{ fontSize: 12, color: '#374151' }}>
+          <strong>{t.statusLabel}</strong>
           <span
             style={{
-              marginLeft: 6,
+              marginLeft: 4,
               fontWeight: 600,
-              color:
-                statusType === 'error'
-                  ? '#ef4444'
-                  : processing
-                    ? '#f59e0b'
-                    : isBaked
-                      ? '#10b981'
-                      : '#2563eb',
+              color: statusType === 'error' ? '#dc2626' : processing ? '#d97706' : isBaked ? '#1677ff' : '#4b5563',
             }}
           >
             {processing && progress > 0 ? t.bakingProgress(progress) : status}
@@ -76,15 +54,13 @@ export const DownloadSection: React.FC<DownloadSectionProps> = ({ t, pipeline, m
             type="button"
             onClick={loadDefaultDemo}
             style={{
-              padding: '5px 12px',
-              fontSize: 12,
-              background: '#f8fafc',
-              border: '1px solid #cbd5e1',
-              borderRadius: 4,
+              padding: '3px 8px',
+              fontSize: 11,
+              background: '#ffffff',
+              border: '1px solid #d9d9d9',
+              borderRadius: 2,
               cursor: 'pointer',
-              color: '#475569',
-              fontWeight: 500,
-              transition: 'all 0.15s ease',
+              color: '#374151',
             }}
           >
             {t.testDefaultBtn}
@@ -92,107 +68,94 @@ export const DownloadSection: React.FC<DownloadSectionProps> = ({ t, pipeline, m
         )}
       </div>
 
-      {/* 2. 核心烘焙按钮：开始烘焙 / 重新烘焙 */}
-      <div style={{ marginBottom: isBaked ? 16 : 0 }}>
+      {/* 烘焙控制按钮 */}
+      <div style={{ marginBottom: isBaked ? 10 : 0 }}>
         <button
           type="button"
           onClick={startBake}
           disabled={isBusy}
           style={{
             width: '100%',
-            padding: '12px 20px',
-            background: isBaked ? '#d97706' : '#2563eb',
+            padding: '9px 12px',
+            background: '#1677ff',
             color: '#ffffff',
             border: 'none',
-            borderRadius: 6,
-            fontSize: 15,
-            fontWeight: 700,
+            borderRadius: 2,
+            fontSize: 13,
+            fontWeight: 600,
             cursor: isBusy ? 'not-allowed' : 'pointer',
             opacity: isBusy ? 0.6 : 1,
-            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
-            transition: 'background 0.2s',
           }}
         >
-          {processing
-            ? t.bakingProgress(progress)
-            : isBaked
-              ? t.reBakeBtn
-              : t.startBakeBtn}
+          {processing ? t.bakingProgress(progress) : isBaked ? t.reBakeBtn : t.startBakeBtn}
         </button>
       </div>
 
-      {/* 3. 烘焙完成后展现的下载区 */}
+      {/* 导出区域 */}
       {isBaked && (
-        <div style={{ borderTop: '1px dashed #cbd5e1', paddingTop: 14 }}>
-          {/* 当前导出区间信息 */}
-          <div style={{ fontSize: 12, color: '#64748b', marginBottom: 12, fontWeight: 500 }}>
+        <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: 10, marginTop: 10 }}>
+          <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 8 }}>
             {t.currentExportInfo(startFrame, endFrame, frameCount, durationSec)}
           </div>
 
-          {/* 下载操作按钮组 */}
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            {/* 下载 VRMA */}
-            <button
-              type="button"
-              onClick={() => downloadVrma(meta.getVrmaMetaOptions())}
-              disabled={isBusy}
-              style={{
-                flex: 1,
-                minWidth: 160,
-                padding: '10px 16px',
-                background: '#2563eb',
-                color: '#ffffff',
-                border: 'none',
-                borderRadius: 6,
-                fontWeight: 600,
-                fontSize: 13,
-                cursor: isBusy ? 'not-allowed' : 'pointer',
-                opacity: isBusy ? 0.6 : 1,
-                transition: 'opacity 0.15s ease',
-              }}
-            >
-              {exportingType === 'vrma' ? t.exportingVrma : t.downloadVrma}
-            </button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button
+                type="button"
+                onClick={() => downloadVrma(meta.getVrmaMetaOptions())}
+                disabled={isBusy}
+                style={{
+                  flex: 1,
+                  padding: '8px 10px',
+                  background: '#ffffff',
+                  color: '#1677ff',
+                  border: '1px solid #1677ff',
+                  borderRadius: 2,
+                  fontWeight: 600,
+                  fontSize: 12,
+                  cursor: isBusy ? 'not-allowed' : 'pointer',
+                  opacity: isBusy ? 0.6 : 1,
+                }}
+              >
+                {exportingType === 'vrma' ? t.exportingVrma : t.downloadVrma}
+              </button>
 
-            {/* 下载 GLB */}
-            <button
-              type="button"
-              onClick={() => downloadGlb()}
-              disabled={isBusy}
-              style={{
-                flex: 1,
-                minWidth: 160,
-                padding: '10px 16px',
-                background: '#16a34a',
-                color: '#ffffff',
-                border: 'none',
-                borderRadius: 6,
-                fontWeight: 600,
-                fontSize: 13,
-                cursor: isBusy ? 'not-allowed' : 'pointer',
-                opacity: isBusy ? 0.6 : 1,
-                transition: 'opacity 0.15s ease',
-              }}
-            >
-              {exportingType === 'glb' ? t.exportingGlb : t.downloadGlb}
-            </button>
+              <button
+                type="button"
+                onClick={() => downloadGlb()}
+                disabled={isBusy}
+                style={{
+                  flex: 1,
+                  padding: '8px 10px',
+                  background: '#ffffff',
+                  color: '#374151',
+                  border: '1px solid #d9d9d9',
+                  borderRadius: 2,
+                  fontWeight: 600,
+                  fontSize: 12,
+                  cursor: isBusy ? 'not-allowed' : 'pointer',
+                  opacity: isBusy ? 0.6 : 1,
+                }}
+              >
+                {exportingType === 'glb' ? t.exportingGlb : t.downloadGlb}
+              </button>
+            </div>
 
-            {/* 一键下载两者 */}
             <button
               type="button"
               onClick={() => downloadBoth(meta.getVrmaMetaOptions())}
               disabled={isBusy}
               style={{
-                padding: '10px 18px',
-                background: '#7c3aed',
+                width: '100%',
+                padding: '8px 10px',
+                background: '#111827',
                 color: '#ffffff',
                 border: 'none',
-                borderRadius: 6,
+                borderRadius: 2,
                 fontWeight: 600,
-                fontSize: 13,
+                fontSize: 12,
                 cursor: isBusy ? 'not-allowed' : 'pointer',
                 opacity: isBusy ? 0.6 : 1,
-                transition: 'opacity 0.15s ease',
               }}
             >
               {t.downloadBoth}
