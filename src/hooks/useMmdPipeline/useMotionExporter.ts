@@ -6,9 +6,8 @@ import {
     ExpressionTrack,
     mergeExpressionTracksIntoLandmarkData,
 } from '../../utils/expressionTrackEvaluator';
-import { exportFull52HumanoidGLB } from '../../utils/glbExporter';
+import { exportFull52HumanoidGLB, exportFull52VRMA, VrmaMetaOptions } from '../../utils/motionExporter';
 import { trimLandmarkData } from '../../utils/motionTrimmer';
-import { exportFull52VRMA, VrmaMetaOptions } from '../../utils/vrmaExporter';
 
 function triggerBrowserDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -49,7 +48,6 @@ export function useMotionExporter({
           rawLandmarkDataRef.current,
           expressionTracks
         );
-        // 此处为全流唯一的 Trimming 裁切出口！
         const trimmed = trimLandmarkData(withExpressions, startFrame, endFrame);
         const blob = await buildBlob(trimmed);
         triggerBrowserDownload(blob, `${getBaseFilename()}_[${startFrame}-${endFrame}].${format}`);

@@ -1,6 +1,6 @@
 // src/hooks/useVrmaMetadata.ts
 import { useCallback, useEffect, useState } from 'react';
-import type { VrmaMetaOptions } from '../utils/vrmaExporter';
+import type { VrmaMetaOptions } from '../utils/motionExporter';
 
 export interface VrmaMetadataForm {
   title: string;

@@ -3,7 +3,7 @@ import type { VRMCVRMAnimation } from '@pixiv/types-vrmc-vrm-animation-1.0';
 import * as THREE from 'three';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 import { CameraAnimationData } from '../solvers/cameraSolver';
-import { VrmaMetaOptions } from './vrmaExporter';
+import { VrmaMetaOptions } from './motionExporter';
 
 function buildCameraClipAndScene(
   cameraData: CameraAnimationData,
