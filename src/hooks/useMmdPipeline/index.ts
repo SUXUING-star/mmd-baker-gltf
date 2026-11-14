@@ -66,6 +66,8 @@ export function useMmdPipeline(
   loopOptions: LoopBlendOptions = DEFAULT_LOOP_OPTIONS,
   expressionTracks: ExpressionTrack[] = []
 ): MmdPipeline {
+  const t = useMemo(() => I18N[lang], [lang]);
+
   const [bakeTargetType, setBakeTargetTypeState] = useState<BakeTargetType>('motion');
   const [statusType, setStatusType] = useState<StatusType>('ready');
   const [errorMessage, setErrorMessage] = useState<string>('');
@@ -91,6 +93,7 @@ export function useMmdPipeline(
     startFrame: playback.startFrame,
     endFrame: playback.endFrame,
     getBaseFilename: files.getBaseFilename,
+    t,
   });
 
   const clearAllBakedState = useCallback(
@@ -179,21 +182,21 @@ export function useMmdPipeline(
       await runBakeMotion(files.activePmxTarget, files.activeVmdTarget, files.customExtraFiles);
     } else {
       if (!files.vmdFile) {
-        alert('在镜头解算模式下，请选择上传专属的 .vmd 镜头文件！');
+        alert(t.cameraBakeAlert);
         return;
       }
       await runBakeCamera(files.vmdFile);
     }
-  }, [bakeTargetType, runBakeMotion, runBakeCamera, files]);
+  }, [bakeTargetType, runBakeMotion, runBakeCamera, files, t]);
 
   const loadDefaultDemo = useCallback(async () => {
     files.resetAllToDefault();
     if (bakeTargetType === 'motion') {
       await runBakeMotion(defaultPmxPath, defaultVmdPath, []);
     } else {
-      alert('请上传专属的 MMD 镜头 .vmd 文件进行解算！');
+      alert(t.cameraDemoAlert);
     }
-  }, [bakeTargetType, files, runBakeMotion, defaultPmxPath, defaultVmdPath]);
+  }, [bakeTargetType, files, runBakeMotion, defaultPmxPath, defaultVmdPath, t]);
 
   const downloadCameraVrma = useCallback(
     async (metaOptions?: VrmaMetaOptions) => {
@@ -209,28 +212,30 @@ export function useMmdPipeline(
         document.body.removeChild(a);
         setTimeout(() => URL.revokeObjectURL(url), 1000);
       } catch (err) {
-        alert(`导出相机 VRMA 失败: ${err}`);
+        alert(t.exportCameraFail('VRMA', String(err)));
       }
     },
-    [cameraData, playback.startFrame, playback.endFrame, files]
+    [cameraData, playback.startFrame, playback.endFrame, files, t]
   );
 
   const downloadCameraGlb = useCallback(async () => {
     if (!cameraData) return;
     try {
       const blob = await exportCameraGLB(cameraData, playback.startFrame, playback.endFrame);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${files.getBaseFilename()}_camera.glb`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch (err) {
-      alert(`导出相机 GLB 失败: ${err}`);
-    }
-  }, [cameraData, playback.startFrame, playback.endFrame, files]);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${files.getBaseFilename()}_camera.glb`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      } catch (err) {
+        alert(t.exportCameraFail('GLB', String(err)));
+      }
+    },
+    [cameraData, playback.startFrame, playback.endFrame, files, t]
+  );
 
   const downloadVrma = useCallback(
     async (metaOptions?: VrmaMetaOptions) => {
@@ -260,7 +265,6 @@ export function useMmdPipeline(
   );
 
   const status = useMemo(() => {
-    const t = I18N[lang];
     switch (statusType) {
       case 'ready':
         return t.statusReady;
@@ -273,7 +277,7 @@ export function useMmdPipeline(
       case 'error':
         return t.statusError(errorMessage);
     }
-  }, [lang, statusType, bakeTargetType, baker.progress, errorMessage]);
+  }, [t, statusType, bakeTargetType, baker.progress, errorMessage]);
 
   return {
     bakeTargetType,

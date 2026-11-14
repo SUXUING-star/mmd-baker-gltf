@@ -1,4 +1,6 @@
+// src/hooks/useMmdPipeline/useMotionExporter.ts
 import { RefObject, useCallback, useRef, useState } from 'react';
+import { I18nTexts } from '../../i18n';
 import { LandmarkData } from '../../types/types';
 import {
     ExpressionTrack,
@@ -27,6 +29,7 @@ interface MotionExporterDeps {
   startFrame: number;
   endFrame: number;
   getBaseFilename: () => string;
+  t?: I18nTexts;
 }
 
 export function useMotionExporter({
@@ -36,6 +39,7 @@ export function useMotionExporter({
   startFrame,
   endFrame,
   getBaseFilename,
+  t,
 }: MotionExporterDeps) {
   const [exportingType, setExportingType] = useState<string | null>(null);
 
@@ -58,12 +62,15 @@ export function useMotionExporter({
         const blob = await buildBlob(trimmed);
         triggerBrowserDownload(blob, `${getBaseFilename()}_[${startFrame}-${endFrame}].${format}`);
       } catch (err) {
-        alert(`导出 ${format.toUpperCase()} 失败: ${err}`);
+        const errMsg = t
+          ? t.exportMotionFail(format.toUpperCase(), String(err))
+          : `导出 ${format.toUpperCase()} 失败: ${err}`;
+        alert(errMsg);
       } finally {
         setExportingType(null);
       }
     },
-    [rawLandmarkDataRef, startFrame, endFrame, getBaseFilename]
+    [rawLandmarkDataRef, startFrame, endFrame, getBaseFilename, t]
   );
 
   const downloadVrma = useCallback(

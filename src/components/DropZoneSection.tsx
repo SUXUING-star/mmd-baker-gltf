@@ -8,6 +8,74 @@ interface DropZoneSectionProps {
   pipeline: MmdPipeline;
 }
 
+function readDirectoryEntries(dirReader: any): Promise<any[]> {
+  return new Promise((resolve) => {
+    const entries: any[] = [];
+    const readBatch = () => {
+      dirReader.readEntries(
+        (batch: any[]) => {
+          if (!batch || batch.length === 0) {
+            resolve(entries);
+          } else {
+            entries.push(...batch);
+            readBatch();
+          }
+        },
+        () => resolve(entries)
+      );
+    };
+    readBatch();
+  });
+}
+
+function readFileSystemEntry(entry: any): Promise<File[]> {
+  return new Promise((resolve) => {
+    if (!entry) {
+      resolve([]);
+      return;
+    }
+    if (entry.isFile) {
+      entry.file(
+        (file: File) => resolve([file]),
+        () => resolve([])
+      );
+    } else if (entry.isDirectory) {
+      const dirReader = entry.createReader();
+      readDirectoryEntries(dirReader).then(async (subEntries) => {
+        const subPromises = subEntries.map((sub) => readFileSystemEntry(sub));
+        const subFilesArrays = await Promise.all(subPromises);
+        resolve(subFilesArrays.flat());
+      });
+    } else {
+      resolve([]);
+    }
+  });
+}
+
+async function scanFilesFromDataTransfer(dataTransfer: DataTransfer): Promise<File[]> {
+  const items = dataTransfer.items;
+
+  if (items && items.length > 0 && typeof items[0].webkitGetAsEntry === 'function') {
+    const entries: any[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const entry = items[i].webkitGetAsEntry();
+      if (entry) entries.push(entry);
+    }
+
+    const allArrays = await Promise.all(entries.map((e) => readFileSystemEntry(e)));
+    return allArrays.flat();
+  }
+
+  const files: File[] = [];
+  if (dataTransfer.files && dataTransfer.files.length > 0) {
+    for (let i = 0; i < dataTransfer.files.length; i++) {
+      files.push(dataTransfer.files[i]);
+    }
+  }
+
+  return files;
+}
+
 export const DropZoneSection: React.FC<DropZoneSectionProps> = ({ t, pipeline }) => {
   const {
     bakeTargetType,
@@ -24,8 +92,7 @@ export const DropZoneSection: React.FC<DropZoneSectionProps> = ({ t, pipeline })
   const folderInputRef = useRef<HTMLInputElement>(null);
   const vmdInputRef = useRef<HTMLInputElement>(null);
 
-  const handlePmxFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
+  const processPmxFileList = (files: FileList | File[]) => {
     if (!files || files.length === 0) return;
 
     let pmxFile: File | null = null;
@@ -48,6 +115,12 @@ export const DropZoneSection: React.FC<DropZoneSectionProps> = ({ t, pipeline })
     }
   };
 
+  const handlePmxFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      processPmxFileList(e.target.files);
+    }
+  };
+
   const handleVmdFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -61,38 +134,29 @@ export const DropZoneSection: React.FC<DropZoneSectionProps> = ({ t, pipeline })
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
   };
 
-  const handleDropPmx = (e: React.DragEvent) => {
+  const handleDropPmx = async (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     if (processing) return;
-    const items = e.dataTransfer.files;
-    if (!items || items.length === 0) return;
 
-    let pmxFile: File | null = null;
-    const extraFiles: File[] = [];
-
-    for (let i = 0; i < items.length; i++) {
-      const f = items[i];
-      if (f.name.toLowerCase().endsWith('.pmx')) {
-        if (!pmxFile) pmxFile = f;
-        else extraFiles.push(f);
-      } else {
-        extraFiles.push(f);
-      }
-    }
-
-    if (pmxFile) {
-      selectPmx(pmxFile, extraFiles);
-    }
+    const files = await scanFilesFromDataTransfer(e.dataTransfer);
+    processPmxFileList(files);
   };
 
-  const handleDropVmd = (e: React.DragEvent) => {
+  const handleDropVmd = async (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     if (processing) return;
-    const file = e.dataTransfer.files?.[0];
-    if (file && file.name.toLowerCase().endsWith('.vmd')) {
-      selectVmd(file);
+
+    const files = await scanFilesFromDataTransfer(e.dataTransfer);
+    const vmd = files.find((f) => f.name.toLowerCase().endsWith('.vmd'));
+    if (vmd) {
+      selectVmd(vmd);
+    } else {
+      alert(t.vmdNotFoundAlert);
     }
   };
 
@@ -142,27 +206,42 @@ export const DropZoneSection: React.FC<DropZoneSectionProps> = ({ t, pipeline })
         </button>
       </div>
 
-      {/* PMX 模型选择框（动作与镜头模式均显示，用于指定场景角色） */}
-      <div style={{ border: '1px solid #e5e7eb', borderRadius: 6, padding: 10, background: '#fafafa' }}>
+      {/* PMX 模型选择与拖拽区域 */}
+      <div
+        onDragOver={handleDragOver}
+        onDrop={handleDropPmx}
+        style={{
+          border: '1px solid #e5e7eb',
+          borderRadius: 6,
+          padding: 10,
+          background: '#fafafa',
+          transition: 'all 0.2s',
+        }}
+      >
         <div style={{ fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
           {t.baseModel}
         </div>
+
         <div
-          onDragOver={handleDragOver}
-          onDrop={handleDropPmx}
+          onClick={() => !processing && pmxInputRef.current?.click()}
           style={{
-            fontSize: 11,
-            color: '#6b7280',
-            padding: '8px 10px',
-            border: '1px dashed #d1d5db',
+            padding: '12px 10px',
+            border: '2px dashed #d1d5db',
             borderRadius: 4,
             background: '#ffffff',
             marginBottom: 8,
             textAlign: 'center',
+            cursor: processing ? 'not-allowed' : 'pointer',
           }}
         >
-          {customPmxFile ? customPmxFile.name : t.defaultModelName}
+          <div style={{ fontSize: 12, fontWeight: 600, color: '#1677ff', marginBottom: 2 }}>
+            {customPmxFile ? customPmxFile.name : t.defaultModelName}
+          </div>
+          <div style={{ fontSize: 10, color: '#9ca3af' }}>
+            {t.pmxDropSubHint}
+          </div>
         </div>
+
         <div style={{ display: 'flex', gap: 4 }}>
           <input
             ref={pmxInputRef}
@@ -190,7 +269,7 @@ export const DropZoneSection: React.FC<DropZoneSectionProps> = ({ t, pipeline })
               fontSize: 11,
               border: '1px solid #d9d9d9',
               borderRadius: 2,
-              cursor: 'pointer',
+              cursor: processing ? 'not-allowed' : 'pointer',
               background: '#ffffff',
             }}
           >
@@ -206,7 +285,7 @@ export const DropZoneSection: React.FC<DropZoneSectionProps> = ({ t, pipeline })
               fontSize: 11,
               border: '1px solid #d9d9d9',
               borderRadius: 2,
-              cursor: 'pointer',
+              cursor: processing ? 'not-allowed' : 'pointer',
               background: '#ffffff',
             }}
           >
@@ -223,7 +302,7 @@ export const DropZoneSection: React.FC<DropZoneSectionProps> = ({ t, pipeline })
                 border: '1px solid #ff4d4f',
                 color: '#ff4d4f',
                 borderRadius: 2,
-                cursor: 'pointer',
+                cursor: processing ? 'not-allowed' : 'pointer',
                 background: '#ffffff',
               }}
             >
@@ -236,7 +315,7 @@ export const DropZoneSection: React.FC<DropZoneSectionProps> = ({ t, pipeline })
       {/* VMD 动画拖拽或点击上传区域 */}
       <div style={{ border: '1px solid #e5e7eb', borderRadius: 6, padding: 10, background: '#fafafa' }}>
         <div style={{ fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
-          {bakeTargetType === 'motion' ? 'VMD 角色动作文件' : 'VMD 镜头动作文件'}
+          {bakeTargetType === 'motion' ? t.vmdMotionTitle : t.vmdCameraTitle}
         </div>
         <input
           ref={vmdInputRef}
